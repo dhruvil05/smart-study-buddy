@@ -1,7 +1,7 @@
 """ExplainerAgent — produces a beginner-friendly explanation of a topic."""
 from nexus_a2a import agent, Task
 
-from app.core.llm import llm
+from app.core.llm import llm, get_current_language, get_language_prompt_template
 
 
 @agent(
@@ -15,8 +15,13 @@ class ExplainerAgent:
 
     async def run(self, task: Task) -> str:
         topic = task.history[0].parts[0].content if task.history else ""
+        language = get_current_language()
         return llm(
+            f"{get_language_prompt_template(language)}\n\n"
             f"Explain this topic for a student in simple language.\n"
-            f"List 3-5 key concepts as bullet points. Under 200 words.\n\nTopic:\n{topic}",
-            system="You are an expert teacher. Make complex topics simple and engaging.",
+            f"List 3-5 key concepts as bullet points. Under 200 words.\n\n"
+            f"Topic:\n{topic}",
+            system=f"You are an expert teacher who explains concepts in {language}. "
+                   f"Make complex topics simple, engaging, and culturally relevant "
+                   f"for {language} language learners.",
         )

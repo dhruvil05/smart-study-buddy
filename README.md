@@ -164,6 +164,8 @@ logging.basicConfig(level=logging.DEBUG)
 | `/` | GET | Frontend UI |
 | `/api/study` | POST | Run study pipeline (topic → explanation → quiz → flashcards) |
 | `/api/provider` | GET/POST | Get/set current LLM provider |
+| `/api/language` | GET/POST | Get/set the active response language (en, es, fr, zh, de) |
+| `/api/localize` | GET | Get localized UI strings for a language (`?lang=es`) |
 | `/api/metrics` | GET | Get pipeline metrics |
 | `/api/audit` | GET | Get audit trail |
 
@@ -183,9 +185,16 @@ uv tree                         # Show dependency tree
 
 ---
 
+## 🌍 Multi-Language Support
+
+The study pipeline can respond in **English, Spanish, French, Mandarin, and German**.
+The frontend has a language selector in the header; the backend auto-detects the
+topic language (falling back to your selection) and runs every agent with a
+language-specific prompt. Use the `/api/language` endpoint to inspect or switch
+the active language programmatically.
+
 ## 🔮 Future Features (See `.claude/plan.md`)
 
-- Multi-language support
 - Advanced quiz types (true/false, fill-in-blank)
 - Flashcard analytics for spaced repetition
 - Mobile PWA with offline sync

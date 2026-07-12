@@ -15,10 +15,14 @@ class QuizMakerAgent:
 
     async def run(self, task: Task) -> str:
         explanation = task.history[0].parts[0].content if task.history else ""
+        language = get_current_language()
         return llm(
+            f"{get_language_prompt_template(language)}\n\n"
             f"Generate exactly 5 multiple choice questions from this explanation.\n"
             f"Return ONLY valid JSON array, no markdown fences.\n"
             f'Format: [{{"q":"Question?","options":["A","B","C","D"],"answer":"A"}}]\n\n'
             f"Explanation:\n{explanation}",
-            system="You are a quiz generator. Return valid JSON only. No markdown ever.",
+            system=f"You are a quiz generator who creates questions in {language}. "
+                   f"Return valid JSON only. No markdown ever. Make questions culturally appropriate "
+                   f"for {language} language learners.",
         )

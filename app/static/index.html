@@ -32,6 +32,9 @@
   .logo-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
   .badge-nexus { font-size: 11px; background: var(--purple-l); color: var(--purple); padding: 3px 9px; border-radius: 20px; font-weight: 500; }
   .provider-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; cursor: pointer; transition: border-color .15s; }
+  .lang-select { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 10px; cursor: pointer; outline: none; transition: border-color .15s; color: var(--text); }
+  .lang-select:hover { border-color: var(--accent); }
+  .lang-select:focus { border-color: var(--accent); }
   .provider-badge:hover { border-color: var(--accent); }
   .provider-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 
@@ -198,6 +201,13 @@
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="badge-nexus">powered by nexus-a2a</span>
+    <select class="lang-select" id="lang-select" onchange="onLanguageChange()" title="Language">
+      <option value="en">🇬🇧 English</option>
+      <option value="es">🇪🇸 Español</option>
+      <option value="fr">🇫🇷 Français</option>
+      <option value="zh">🇨🇳 中文</option>
+      <option value="de">🇩🇪 Deutsch</option>
+    </select>
     <div class="provider-badge" onclick="openModal()" id="provider-badge">
       <span class="provider-dot" id="provider-dot"></span>
       <span id="provider-label">Loading...</span>
@@ -209,8 +219,8 @@
 <div class="container">
 
   <div class="input-card">
-    <h2>What do you want to study?</h2>
-    <p>Paste any topic or text — 3 AI agents will explain it, quiz you, and build flashcards. <strong>Ctrl+Enter</strong> to submit.</p>
+    <h2 id="ui-topic-title">What do you want to study?</h2>
+    <p id="ui-topic-desc">Paste any topic or text — 3 AI agents will explain it, quiz you, and build flashcards. <strong>Ctrl+Enter</strong> to submit.</p>
     <div class="input-row">
       <textarea id="topic-input" placeholder="e.g. Photosynthesis, the French Revolution, Gradient Descent, Recursion in programming..."></textarea>
       <button class="btn-study" id="study-btn" onclick="runStudy()">Study it →</button>
@@ -251,10 +261,10 @@
     <div class="meta-bar" id="meta-bar"></div>
 
     <div class="tabs">
-      <button class="tab active" onclick="switchTab('explain',this)">📖 Explanation</button>
-      <button class="tab" onclick="switchTab('quiz',this)">❓ Quiz</button>
-      <button class="tab" onclick="switchTab('flashcards',this)">🃏 Flashcards</button>
-      <button class="tab" onclick="switchTab('monitor',this)">📊 Monitor</button>
+      <button class="tab active" id="tab-explain" onclick="switchTab('explain',this)">📖 Explanation</button>
+      <button class="tab" id="tab-quiz" onclick="switchTab('quiz',this)">❓ Quiz</button>
+      <button class="tab" id="tab-flashcards" onclick="switchTab('flashcards',this)">🃏 Flashcards</button>
+      <button class="tab" id="tab-monitor" onclick="switchTab('monitor',this)">📊 Monitor</button>
     </div>
 
     <div class="panel active" id="panel-explain">
@@ -355,6 +365,52 @@ async function saveProvider() {
   }
 }
 
+/* ── Language UI ── */
+let currentLang = 'en';
+const LS_LANG_KEY = 'ssb_language';
+
+async function loadLanguage() {
+  try {
+    const res = await fetch('/api/language');
+    const data = await res.json();
+    const saved = localStorage.getItem(LS_LANG_KEY);
+    currentLang = saved && data.supported.includes(saved) ? saved : data.current;
+  } catch(e) {
+    currentLang = 'en';
+  }
+  document.getElementById('lang-select').value = currentLang;
+  await applyLocalization(currentLang);
+}
+
+async function applyLocalization(lang) {
+  try {
+    const res = await fetch('/api/localize?lang=' + encodeURIComponent(lang));
+    const s = await res.json();
+    document.documentElement.lang = lang;
+    setText('ui-topic-title', s.topic_prompt);
+    setText('study-btn', s.generate);
+    setText('tab-explain', '📖 ' + s.explanation);
+    setText('tab-quiz', '❓ ' + s.quiz);
+    setText('tab-flashcards', '🃏 ' + s.flashcards);
+  } catch(e) {}
+}
+
+function setText(id, text) { const el = document.getElementById(id); if (el && text != null) el.textContent = text; }
+
+async function onLanguageChange() {
+  const lang = document.getElementById('lang-select').value;
+  currentLang = lang;
+  localStorage.setItem(LS_LANG_KEY, lang);
+  try {
+    await fetch('/api/language', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang }),
+    });
+  } catch(e) {}
+  await applyLocalization(lang);
+}
+
 /* ── Study pipeline ── */
 function setAgent(id, state) { document.getElementById(id).className = 'pipe-agent ' + state; }
 function resetAgents() { ['ag-explain','ag-quiz','ag-flash'].forEach(id => setAgent(id, '')); }
@@ -384,7 +440,7 @@ async function runStudy() {
     const res = await fetch('/api/study', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic }),
+      body: JSON.stringify({ topic, language: document.getElementById('lang-select').value }),
     });
     clearInterval(interval);
     loading.classList.remove('show');
@@ -411,6 +467,7 @@ function renderResults(data) {
   const providerLabel = m.provider === 'gemini' ? 'Gemini 2.0 Flash' : 'Claude Haiku';
   document.getElementById('meta-bar').innerHTML = `
     <div class="meta-chip"><span class="dot" style="background:${providerColor}"></span>${providerLabel}</div>
+    <div class="meta-chip"><span class="dot dot-accent"></span>${(m.language||'en').toUpperCase()}</div>
     <div class="meta-chip"><span class="dot dot-green"></span>${m.total_sec}s total</div>
     <div class="meta-chip"><span class="dot dot-amber"></span>${m.orchestration}</div>
     <div class="meta-chip" style="font-family:monospace;font-size:11px">task: ${data.task_id.slice(0,8)}…</div>
@@ -513,6 +570,7 @@ function clearError()   { document.getElementById('error-box').style.display='no
 document.getElementById('topic-input').addEventListener('keydown', e => { if (e.key==='Enter' && (e.ctrlKey||e.metaKey)) runStudy(); });
 
 loadProvider();
+loadLanguage();
 </script>
 </body>
 </html>

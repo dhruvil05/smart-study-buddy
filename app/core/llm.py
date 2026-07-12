@@ -10,8 +10,18 @@ from typing import Literal
 
 from app.core.config import PROVIDER_MODELS, Provider
 
+# Supported languages for localization
+SUPPORTED_LANGUAGES = {
+    "en": "English",      # English (default)
+    "es": "Spanish",      # Spanish
+    "fr": "French",       # French
+    "zh": "Mandarin",     # Mandarin Chinese
+    "de": "German",       # German
+}
+
 # Runtime provider state (mutated by set_provider)
 _current_provider: Provider = os.environ.get("LLM_PROVIDER", "anthropic").lower()  # type: ignore[assignment]
+_current_language: str = os.environ.get("LLM_LANGUAGE", "en").lower()  # Default to English
 _anthropic_client = None
 _gemini_client = None
 _openrouter_client = None
@@ -99,13 +109,77 @@ def _llm_openrouter(prompt: str, system: str) -> str:
         return f"[OpenRouter error: {e}]"
 
 
-def llm(prompt: str, system: str = "") -> str:
-    """Route a prompt to the currently selected provider."""
+def get_language_prompt_template(language: str) -> str:
+    """Return a language-specific prompt template for localization."""
+    templates = {
+        "en": "Please explain the topic for English learners.",
+        "es": "Por favor, explica el tema para estudiantes de español.",
+        "fr": "S'il vous plaît, expliquez ce sujet pour des apprenants francophones.",
+        "zh": "请为中文学习者解释这个主题。",
+        "de": "Bitte erklären Sie das Thema für Deutschlerner.",
+    }
+    return templates.get(language, templates["en"])
+
+
+def _add_language_context(prompt: str, language: str) -> str:
+    """Add language context to the prompt for better localization."""
+    lang_instruction = get_language_prompt_template(language)
+    return f"{lang_instruction}\n\n{prompt}"
+
+
+def _llm_anthropic(prompt: str, system: str, language: str = "en") -> str:
+    try:
+        full_system = f"{system}\n\n{get_language_prompt_template(language)}" if system else get_language_prompt_template(language)
+        resp = _get_anthropic().messages.create(
+            model=PROVIDER_MODELS["anthropic"],
+            max_tokens=1024,
+            system=full_system,
+            messages=[{"role": "user", "content": _add_language_context(prompt, language)}],
+        )
+        return resp.content[0].text.strip()
+    except Exception as e:  # noqa: BLE001 - surface as recoverable string
+        return f"[Anthropic error: {e}]"
+
+
+def _llm_gemini(prompt: str, system: str, language: str = "en") -> str:
+    try:
+        from google.genai import types
+        full_system = f"{system}\n\n{get_language_prompt_template(language)}" if system else get_language_prompt_template(language)
+        resp = _get_gemini().models.generate_content(
+            model=PROVIDER_MODELS["gemini"],
+            contents=f"{full_system}\n\n{_add_language_context(prompt, language)}",
+            config=types.GenerateContentConfig(max_output_tokens=1024),
+        )
+        return resp.text.strip()
+    except Exception as e:  # noqa: BLE001
+        return f"[Gemini error: {e}]"
+
+
+def _llm_openrouter(prompt: str, system: str, language: str = "en") -> str:
+    try:
+        client = _get_openrouter()
+        full_system = f"{system}\n\n{get_language_prompt_template(language)}" if system else get_language_prompt_template(language)
+        resp = client.chat.completions.create(
+            model=PROVIDER_MODELS["openrouter"],
+            max_tokens=1024,
+            messages=[{"role": "user", "content": f"{full_system}\n\n{_add_language_context(prompt, language)}"}],
+            temperature=0.7,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:  # noqa: BLE001
+        return f"[OpenRouter error: {e}]"
+
+
+def llm(prompt: str, system: str = "", language: str = None) -> str:
+    """Route a prompt to the currently selected provider with optional language parameter."""
+    if language is None:
+        language = get_current_language()
+
     if _current_provider == "openrouter":
-        return _llm_openrouter(prompt, system)
+        return _llm_openrouter(prompt, system, language)
     elif _current_provider == "gemini":
-        return _llm_gemini(prompt, system)
-    return _llm_anthropic(prompt, system)
+        return _llm_gemini(prompt, system, language)
+    return _llm_anthropic(prompt, system, language)
 
 
 def set_provider(provider: str) -> Provider:
@@ -141,14 +215,47 @@ def set_provider(provider: str) -> Provider:
     return _current_provider
 
 
-def current_provider() -> Provider:
-    return _current_provider  # type: ignore[return-value]
+def current_provider() -> str:
+    """Return the currently active provider (e.g. 'anthropic', 'gemini')."""
+    return _current_provider
 
 
-def has_provider(provider: str) -> bool:
-    env_map = {
+def has_provider(name: str) -> bool:
+    """Return True if the given provider has a configured API key."""
+    env_key = {
         "anthropic": "ANTHROPIC_API_KEY",
         "gemini": "GEMINI_API_KEY",
         "openrouter": "OPENROUTER_API_KEY",
     }
-    return bool(os.environ.get(env_map.get(provider, "")))
+    key = env_key.get(name.lower())
+    return bool(key and os.environ.get(key))
+
+
+def get_current_language() -> str:
+    """Return the language selected via LLM_LANGUAGE (falls back to default)."""
+    return _current_language
+
+
+def set_language(language: str) -> str:
+    """Switch the active language.
+
+    Args:
+        language: Language code (e.g., 'en', 'es', 'fr', 'zh')
+
+    Returns:
+        The set language code
+
+    Raises:
+        ValueError: If language is not supported
+    """
+    global _current_language
+    lang = language.lower()
+    if lang not in SUPPORTED_LANGUAGES:
+        raise ValueError(f"Language '{language}' not supported. Supported languages: {list(SUPPORTED_LANGUAGES.keys())}")
+    _current_language = lang
+    return _current_language
+
+
+def has_language(language: str) -> bool:
+    """Check if the given language is supported."""
+    return language.lower() in SUPPORTED_LANGUAGES
