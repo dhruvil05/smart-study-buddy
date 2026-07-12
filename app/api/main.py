@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -42,6 +42,7 @@ from nexus_a2a import (
 
 from app.core.config import load_env
 from app.core import llm as llm_mod
+from app.core import i18n
 from app.agents import ALL_AGENTS, ExplainerAgent, QuizMakerAgent, FlashcardAgent
 
 load_dotenv()
@@ -129,10 +130,15 @@ app.add_middleware(
 
 class StudyRequest(BaseModel):
     topic: str
+    language: str | None = None  # Optional: explicit language override; falls back to current setting
 
 
 class ProviderRequest(BaseModel):
     provider: str
+
+
+class LanguageRequest(BaseModel):
+    language: str
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -158,12 +164,53 @@ async def set_provider(req: ProviderRequest):
     return {"current": llm_mod.current_provider(), "message": f"Switched to {req.provider.upper()} ✅"}
 
 
+@app.get("/api/language")
+async def get_language():
+    """Get the currently selected language."""
+    return {
+        "current": llm_mod.get_current_language(),
+        "supported": list(llm_mod.SUPPORTED_LANGUAGES.keys()),
+        "names": llm_mod.SUPPORTED_LANGUAGES,
+    }
+
+
+@app.post("/api/language")
+async def set_language(req: LanguageRequest):
+    """Set the active language for LLM prompts and UI."""
+    try:
+        lang = llm_mod.set_language(req.language)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {
+        "current": lang,
+        "message": f"Language switched to {llm_mod.SUPPORTED_LANGUAGES.get(lang, lang)} ✅",
+    }
+
+
+@app.get("/api/localize")
+async def localize_strings(lang: str = "en"):
+    """Return all localized UI strings for the given language code."""
+    return i18n.get_all_strings(lang)
+
+
 @app.post("/api/study")
 async def study(req: StudyRequest):
     if not req.topic.strip():
         raise HTTPException(400, "Topic cannot be empty")
     if not await limiter.is_allowed("user"):
         raise HTTPException(429, "Rate limit exceeded")
+
+    # ── Language detection + selection ───────────────────────────────────────────
+    # Explicit override wins; otherwise auto-detect from the topic text.
+    language = req.language if req.language else i18n.detect_language(req.topic)
+    if not i18n.is_supported(language):
+        language = "en"
+    llm_mod.set_language(language)
+
+    # ── Language-aware content filter on the input topic ─────────────────────────
+    passed, reason = i18n.filter_content(req.topic, language)
+    if not passed:
+        raise HTTPException(400, reason)
 
     msg = Message(role=MessageRole.USER, parts=[Part(type=PartType.TEXT, content=req.topic)])
     try:
@@ -175,7 +222,7 @@ async def study(req: StudyRequest):
     metrics.record_task_created()
     audit.task_created(task)
     await task_mgr.start(task.id)
-    await bus.publish("study.started", {"task_id": task.id, "topic": req.topic[:60]})
+    await bus.publish("study.started", {"task_id": task.id, "topic": req.topic[:60], "language": language})
     start = time.perf_counter()
 
     try:
@@ -243,6 +290,7 @@ async def study(req: StudyRequest):
             "flashcards": flashcard_data,
             "meta": {
                 "provider": llm_mod.current_provider(),
+                "language": language,
                 "total_sec": round(total_sec, 2),
                 "orchestration": "ExplainerAgent → (QuizMakerAgent ‖ FlashcardAgent)",
                 "agents": ["ExplainerAgent", "QuizMakerAgent", "FlashcardAgent"],

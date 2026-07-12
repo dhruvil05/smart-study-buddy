@@ -1,7 +1,7 @@
 """FlashcardAgent — creates flashcards for spaced repetition from an explanation."""
 from nexus_a2a import agent, Task
 
-from app.core.llm import llm
+from app.core.llm import llm, get_current_language, get_language_prompt_template
 
 
 @agent(
@@ -15,10 +15,14 @@ class FlashcardAgent:
 
     async def run(self, task: Task) -> str:
         explanation = task.history[0].parts[0].content if task.history else ""
+        language = get_current_language()
         return llm(
+            f"{get_language_prompt_template(language)}\n\n"
             f"Create exactly 6 flashcards from this explanation.\n"
             f"Return ONLY valid JSON array, no markdown fences.\n"
             f'Format: [{{"term":"Term","definition":"One-sentence definition"}}]\n\n'
             f"Explanation:\n{explanation}",
-            system="You are a flashcard creator. Return valid JSON only. No markdown ever.",
+            system=f"You are a flashcard creator who writes in {language}. "
+                   f"Return valid JSON only. No markdown ever. Make terms and definitions "
+                   f"culturally appropriate for {language} language learners.",
         )
