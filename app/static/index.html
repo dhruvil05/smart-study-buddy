@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Study Buddy</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:       #f7f6f3;
+    --surface:  #ffffff;
+    --border:   #e5e3dc;
+    --text:     #1a1a18;
+    --muted:    #6b6b66;
+    --accent:   #185FA5;
+    --accent-l: #E6F1FB;
+    --green:    #1D9E75;
+    --green-l:  #EAF3DE;
+    --amber:    #BA7517;
+    --amber-l:  #FAEEDA;
+    --red:      #A32D2D;
+    --red-l:    #FCEBEB;
+    --purple:   #534AB7;
+    --purple-l: #EEEDFE;
+    --radius:   10px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; flex-wrap: wrap; gap: 8px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; }
+  .logo-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
+  .badge-nexus { font-size: 11px; background: var(--purple-l); color: var(--purple); padding: 3px 9px; border-radius: 20px; font-weight: 500; }
+  .provider-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; cursor: pointer; transition: border-color .15s; }
+  .provider-badge:hover { border-color: var(--accent); }
+  .provider-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+  /* Modal overlay */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; width: 420px; max-width: 95vw; border: 1px solid var(--border); }
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .modal p  { font-size: 13px; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.5; }
+  .provider-pills { display: flex; gap: 8px; margin-bottom: 1.25rem; }
+  .pill { flex: 1; padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius); cursor: pointer; text-align: center; transition: all .15s; background: var(--bg); }
+  .pill:hover { border-color: var(--accent); }
+  .pill.selected { border-color: var(--accent); background: var(--accent-l); }
+  .pill .pill-name { font-size: 14px; font-weight: 600; margin-top: 6px; }
+  .pill .pill-model { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pill-icon { font-size: 24px; }
+  .key-row { margin-bottom: 10px; }
+  .key-row label { font-size: 12px; font-weight: 500; color: var(--muted); display: block; margin-bottom: 4px; }
+  .key-row input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: monospace; outline: none; transition: border .15s; }
+  .key-row input:focus { border-color: var(--accent); }
+  .key-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .modal-btns { display: flex; gap: 8px; margin-top: 1.25rem; }
+  .btn-cancel { flex: 1; padding: 9px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; font-size: 13px; }
+  .btn-cancel:hover { background: var(--surface); }
+  .btn-save { flex: 2; padding: 9px; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .btn-save:hover { background: #0C447C; }
+  .modal-msg { font-size: 12px; margin-top: 10px; min-height: 18px; }
+  .modal-msg.ok  { color: var(--green); }
+  .modal-msg.err { color: var(--red); }
+
+  /* Layout */
+  .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* Input card */
+  .input-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .input-card h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .input-card p  { font-size: 13px; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
+  .input-row { display: flex; gap: 10px; }
+  textarea { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 80px; outline: none; transition: border .15s; }
+  textarea:focus { border-color: var(--accent); }
+  .btn-study { padding: 10px 24px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; white-space: nowrap; align-self: flex-end; }
+  .btn-study:hover { background: #0C447C; }
+  .btn-study:disabled { background: #b0c4de; cursor: not-allowed; }
+
+  /* Pipeline */
+  .pipeline { display: flex; align-items: center; margin-bottom: 1.5rem; gap: 0; }
+  .pipe-agent { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 10px; text-align: center; transition: all .3s; }
+  .pipe-agent .icon { font-size: 22px; }
+  .pipe-agent .name { font-size: 12px; font-weight: 600; margin-top: 4px; }
+  .pipe-agent .sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pipe-agent.running { border-color: var(--accent); background: var(--accent-l); }
+  .pipe-agent.done    { border-color: var(--green);  background: var(--green-l); }
+  .pipe-arrow { padding: 0 6px; color: var(--muted); font-size: 18px; }
+  .pipe-parallel { display: flex; flex-direction: column; gap: 8px; flex: 2; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 1rem; border-bottom: 1px solid var(--border); }
+  .tab  { padding: 8px 16px; font-size: 13px; font-weight: 500; border: none; background: none; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; } .panel.active { display: block; }
+
+  /* Explanation */
+  .explanation-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; line-height: 1.8; font-size: 14px; white-space: pre-wrap; }
+
+  /* Quiz */
+  .quiz-q { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 12px; }
+  .quiz-q .q-text { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .option { padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; background: var(--bg); }
+  .option:hover   { border-color: var(--accent); background: var(--accent-l); }
+  .option.correct { background: var(--green-l); border-color: var(--green); color: #085041; }
+  .option.wrong   { background: var(--red-l);   border-color: var(--red);   color: #501313; }
+  .option.reveal  { background: var(--green-l); border-color: var(--green); color: #085041; }
+  .quiz-score { background: var(--accent-l); border: 1px solid var(--accent); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; font-size: 14px; font-weight: 500; color: var(--accent); display: none; }
+
+  /* Flashcards */
+  .flashcards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .flashcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; cursor: pointer; transition: all .2s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; }
+  .flashcard:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); transform: translateY(-1px); }
+  .flashcard .term { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
+  .flashcard .def  { font-size: 13px; color: var(--muted); line-height: 1.5; display: none; }
+  .flashcard.flipped .def  { display: block; }
+  .flashcard.flipped .term { color: var(--text); }
+  .fc-hint { position: absolute; top: 8px; right: 10px; font-size: 10px; color: var(--border); }
+  .fc-all-btn { margin-bottom: 12px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 13px; cursor: pointer; }
+
+  /* Meta */
+  .meta-bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .meta-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-green  { background: var(--green); }
+  .dot-accent { background: var(--accent); }
+  .dot-amber  { background: var(--amber); }
+  .dot-purple { background: var(--purple); }
+
+  /* Monitor */
+  .metrics-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+  .metric .val { font-size: 24px; font-weight: 600; }
+  .metric .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .audit-log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; max-height: 260px; overflow-y: auto; }
+  .audit-row { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .audit-row:last-child { border-bottom: none; }
+  .evt-badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; background: var(--accent-l); color: var(--accent); white-space: nowrap; }
+  .audit-url { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Loading */
+  .loading { display: none; flex-direction: column; align-items: center; gap: 12px; padding: 2rem; }
+  .loading.show { display: flex; }
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: var(--muted); }
+
+  .error-box { background: var(--red-l); border: 1px solid var(--red); border-radius: var(--radius); padding: 12px 16px; font-size: 13px; color: var(--red); margin-bottom: 1rem; display: none; }
+  .empty { text-align: center; padding: 3rem; color: var(--muted); font-size: 14px; }
+
+  @media(max-width:600px) {
+    .options { grid-template-columns: 1fr; }
+    .metrics-grid { grid-template-columns: repeat(2,1fr); }
+    .pipeline { flex-direction: column; }
+    .pipe-arrow { transform: rotate(90deg); }
+    .header { height: auto; padding: 10px 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Provider switcher modal -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h2>LLM Provider</h2>
+    <p>Choose which AI model powers the study agents. You can switch anytime without restarting.</p>
+
+    <div class="provider-pills">
+      <div class="pill" id="pill-anthropic" onclick="selectPill('anthropic')">
+        <div class="pill-icon">🟣</div>
+        <div class="pill-name">Anthropic</div>
+        <div class="pill-model">claude-haiku-4-5</div>
+      </div>
+      <div class="pill" id="pill-gemini" onclick="selectPill('gemini')">
+        <div class="pill-icon">🔵</div>
+        <div class="pill-name">Google Gemini</div>
+        <div class="pill-model">gemini-2.0-flash</div>
+      </div>
+      <div class="pill" id="pill-openrouter" onclick="selectPill('openrouter')">
+        <div class="pill-icon">🟠</div>
+        <div class="pill-name">OpenRouter</div>
+        <div class="pill-model">claude-haiku-4.5</div>
+      </div>
+    </div>
+
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-save" onclick="saveProvider()">Save & switch ✓</button>
+    </div>
+    <div class="modal-msg" id="modal-msg"></div>
+  </div>
+</div>
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">🧠</div>
+    Smart Study Buddy
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="badge-nexus">powered by nexus-a2a</span>
+    <div class="provider-badge" onclick="openModal()" id="provider-badge">
+      <span class="provider-dot" id="provider-dot"></span>
+      <span id="provider-label">Loading...</span>
+      <span style="color:var(--muted);font-size:10px">▼</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="input-card">
+    <h2>What do you want to study?</h2>
+    <p>Paste any topic or text — 3 AI agents will explain it, quiz you, and build flashcards. <strong>Ctrl+Enter</strong> to submit.</p>
+    <div class="input-row">
+      <textarea id="topic-input" placeholder="e.g. Photosynthesis, the French Revolution, Gradient Descent, Recursion in programming..."></textarea>
+      <button class="btn-study" id="study-btn" onclick="runStudy()">Study it →</button>
+    </div>
+  </div>
+
+  <div class="error-box" id="error-box"></div>
+
+  <!-- Agent pipeline visualiser -->
+  <div class="pipeline" id="pipeline">
+    <div class="pipe-agent" id="ag-explain">
+      <div class="icon">🔍</div>
+      <div class="name">ExplainerAgent</div>
+      <div class="sub">simplify topic</div>
+    </div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-parallel">
+      <div class="pipe-agent" id="ag-quiz">
+        <div class="icon">❓</div>
+        <div class="name">QuizMakerAgent</div>
+        <div class="sub">generate MCQs</div>
+      </div>
+      <div class="pipe-agent" id="ag-flash">
+        <div class="icon">🃏</div>
+        <div class="name">FlashcardAgent</div>
+        <div class="sub">make flashcards</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loading-text">Running agents...</div>
+  </div>
+
+  <div id="results" style="display:none">
+
+    <div class="meta-bar" id="meta-bar"></div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('explain',this)">📖 Explanation</button>
+      <button class="tab" onclick="switchTab('quiz',this)">❓ Quiz</button>
+      <button class="tab" onclick="switchTab('flashcards',this)">🃏 Flashcards</button>
+      <button class="tab" onclick="switchTab('monitor',this)">📊 Monitor</button>
+    </div>
+
+    <div class="panel active" id="panel-explain">
+      <div class="explanation-box" id="explanation-text"></div>
+    </div>
+
+    <div class="panel" id="panel-quiz">
+      <div class="quiz-score" id="quiz-score"></div>
+      <div id="quiz-container"></div>
+    </div>
+
+    <div class="panel" id="panel-flashcards">
+      <button class="fc-all-btn" onclick="revealAll()">Reveal all definitions</button>
+      <div class="flashcards-grid" id="flashcards-container"></div>
+    </div>
+
+    <div class="panel" id="panel-monitor">
+      <div class="metrics-grid" id="metrics-grid"></div>
+      <h3 style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--muted)">Audit log (nexus-a2a)</h3>
+      <div class="audit-log" id="audit-log"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+let quizData = [], quizAnswers = {}, flashcardData = [];
+let selectedPill = 'anthropic';
+
+const loadingMessages = [
+  'ExplainerAgent is reading your topic...',
+  'QuizMakerAgent is writing questions...',
+  'FlashcardAgent is building cards...',
+  'Assembling results...',
+  'Running with OpenRouter AI...',
+];
+
+/* ── Provider UI ── */
+async function loadProvider() {
+  try {
+    const res  = await fetch('/api/provider');
+    const data = await res.json();
+    const labels = {
+      'anthropic': 'Claude Haiku',
+      'gemini': 'Gemini 2.0 Flash',
+      'openrouter': 'OpenRouter AI'
+    };
+    const colors = {
+      'anthropic': '#534AB7',
+      'gemini': '#185FA5',
+      'openrouter': '#FF9900'
+    };
+    const label = labels[data.current] || 'Provider';
+    document.getElementById('provider-label').textContent = label;
+    document.getElementById('provider-dot').style.background = colors[data.current] || '#534AB7';
+    selectedPill = data.current;
+    updatePills(data.current);
+  } catch(e) {
+    document.getElementById('provider-label').textContent = 'Provider';
+  }
+}
+
+function openModal()  { loadProvider(); document.getElementById('modal-overlay').classList.add('open'); document.getElementById('modal-msg').textContent = ''; }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+function closeModalOutside(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+
+function selectPill(p) {
+  selectedPill = p;
+  updatePills(p);
+}
+
+function updatePills(p) {
+  document.getElementById('pill-anthropic').className = 'pill' + (p === 'anthropic' ? ' selected' : '');
+  document.getElementById('pill-gemini').className    = 'pill' + (p === 'gemini'    ? ' selected' : '');
+  document.getElementById('pill-openrouter').className = 'pill' + (p === 'openrouter' ? ' selected' : '');
+}
+
+async function saveProvider() {
+  const msgEl = document.getElementById('modal-msg');
+  msgEl.className = 'modal-msg';
+  msgEl.textContent = 'Saving...';
+
+  try {
+    const res  = await fetch('/api/provider', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: selectedPill }),
+    });
+    const data = await res.json();
+    if (!res.ok) { msgEl.className = 'modal-msg err'; msgEl.textContent = data.detail; return; }
+    msgEl.className = 'modal-msg ok';
+    msgEl.textContent = data.message;
+    loadProvider();
+    setTimeout(closeModal, 1200);
+  } catch(e) {
+    msgEl.className = 'modal-msg err';
+    msgEl.textContent = 'Could not reach server.';
+  }
+}
+
+/* ── Study pipeline ── */
+function setAgent(id, state) { document.getElementById(id).className = 'pipe-agent ' + state; }
+function resetAgents() { ['ag-explain','ag-quiz','ag-flash'].forEach(id => setAgent(id, '')); }
+
+async function runStudy() {
+  const topic = document.getElementById('topic-input').value.trim();
+  if (!topic) { showError('Please enter a topic first.'); return; }
+
+  clearError();
+  resetAgents();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('study-btn').disabled = true;
+
+  const loading = document.getElementById('loading');
+  loading.classList.add('show');
+
+  let msgIdx = 0;
+  const interval = setInterval(() => {
+    document.getElementById('loading-text').textContent = loadingMessages[msgIdx % loadingMessages.length];
+    if (msgIdx === 0) setAgent('ag-explain', 'running');
+    if (msgIdx === 2) { setAgent('ag-explain', 'done'); setAgent('ag-quiz', 'running'); setAgent('ag-flash', 'running'); }
+    if (msgIdx === 3) { setAgent('ag-quiz', 'done'); setAgent('ag-flash', 'done'); }
+    msgIdx++;
+  }, 1400);
+
+  try {
+    const res = await fetch('/api/study', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic }),
+    });
+    clearInterval(interval);
+    loading.classList.remove('show');
+    document.getElementById('study-btn').disabled = false;
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+      showError(err.detail || `Error ${res.status}`);
+      resetAgents(); return;
+    }
+    renderResults(await res.json());
+  } catch(e) {
+    clearInterval(interval);
+    loading.classList.remove('show');
+    document.getElementById('study-btn').disabled = false;
+    showError('Could not reach the server. Is it running on port 8000?');
+    resetAgents();
+  }
+}
+
+function renderResults(data) {
+  const m = data.meta;
+  const providerColor = m.provider === 'gemini' ? '#185FA5' : '#534AB7';
+  const providerLabel = m.provider === 'gemini' ? 'Gemini 2.0 Flash' : 'Claude Haiku';
+  document.getElementById('meta-bar').innerHTML = `
+    <div class="meta-chip"><span class="dot" style="background:${providerColor}"></span>${providerLabel}</div>
+    <div class="meta-chip"><span class="dot dot-green"></span>${m.total_sec}s total</div>
+    <div class="meta-chip"><span class="dot dot-amber"></span>${m.orchestration}</div>
+    <div class="meta-chip" style="font-family:monospace;font-size:11px">task: ${data.task_id.slice(0,8)}…</div>
+  `;
+  document.getElementById('explanation-text').textContent = data.explanation;
+
+  quizData = data.quiz || [];
+  quizAnswers = {};
+  renderQuiz();
+
+  flashcardData = data.flashcards || [];
+  renderFlashcards();
+
+  document.getElementById('results').style.display = 'block';
+  switchTab('explain', document.querySelector('.tab'));
+  loadMonitor();
+}
+
+/* ── Quiz ── */
+function renderQuiz() {
+  const c = document.getElementById('quiz-container');
+  if (!quizData.length) { c.innerHTML = '<div class="empty">No quiz data available.</div>'; return; }
+  document.getElementById('quiz-score').style.display = 'none';
+  c.innerHTML = quizData.map((q, qi) => `
+    <div class="quiz-q">
+      <div class="q-text">${qi+1}. ${q.q}</div>
+      <div class="options">
+        ${(q.options||[]).map((opt,oi) => `<div class="option" id="opt-${qi}-${oi}" onclick="answerQ(${qi},'${esc(opt)}','${esc(q.answer)}')">${opt}</div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+function answerQ(qi, chosen, correct) {
+  if (quizAnswers[qi] !== undefined) return;
+  quizAnswers[qi] = chosen;
+  (quizData[qi].options||[]).forEach((opt, oi) => {
+    const el = document.getElementById(`opt-${qi}-${oi}`);
+    if (opt === correct)                      el.classList.add('reveal');
+    if (opt === chosen && chosen !== correct)  el.classList.add('wrong');
+    if (opt === chosen && chosen === correct)  el.classList.add('correct');
+  });
+  if (Object.keys(quizAnswers).length === quizData.length) {
+    const score = Object.entries(quizAnswers).filter(([i,a]) => a === quizData[i].answer).length;
+    const sc = document.getElementById('quiz-score');
+    sc.style.display = 'block';
+    sc.textContent = `Score: ${score}/${quizData.length} — ${score===quizData.length?'🎉 Perfect!':score>=quizData.length/2?'👍 Good job!':'📚 Keep studying!'}`;
+  }
+}
+
+/* ── Flashcards ── */
+function renderFlashcards() {
+  const c = document.getElementById('flashcards-container');
+  if (!flashcardData.length) { c.innerHTML = '<div class="empty">No flashcards available.</div>'; return; }
+  c.innerHTML = flashcardData.map((fc,i) => `
+    <div class="flashcard" id="fc-${i}" onclick="flipCard(${i})">
+      <div class="fc-hint">tap to flip</div>
+      <div class="term">${fc.term}</div>
+      <div class="def">${fc.definition}</div>
+    </div>`).join('');
+}
+
+function flipCard(i) { document.getElementById(`fc-${i}`).classList.toggle('flipped'); }
+function revealAll() { flashcardData.forEach((_,i) => document.getElementById(`fc-${i}`).classList.add('flipped')); }
+
+/* ── Monitor ── */
+async function loadMonitor() {
+  try {
+    const [mRes, aRes] = await Promise.all([fetch('/api/metrics'), fetch('/api/audit')]);
+    const m = await mRes.json(), a = await aRes.json();
+    const pLabel = m.provider === 'gemini' ? 'Gemini 2.0 Flash' : 'Claude Haiku';
+    document.getElementById('metrics-grid').innerHTML = `
+      <div class="metric"><div class="val">${m.tasks_created}</div><div class="lbl">tasks created</div></div>
+      <div class="metric"><div class="val">${m.tasks_completed}</div><div class="lbl">completed</div></div>
+      <div class="metric"><div class="val">${m.tasks_failed}</div><div class="lbl">failed</div></div>
+      <div class="metric"><div class="val">${m.agents_healthy}</div><div class="lbl">agents healthy</div></div>
+    `;
+    document.getElementById('audit-log').innerHTML = [...a].reverse().map(e => `
+      <div class="audit-row">
+        <span class="evt-badge">${e.event}</span>
+        <span class="audit-url">${e.agent_url||e.task_id||'—'}</span>
+        <span style="color:var(--muted);font-size:11px;white-space:nowrap">${new Date(e.ts*1000).toLocaleTimeString()}</span>
+      </div>`).join('') || '<div style="font-size:13px;color:var(--muted)">No entries yet.</div>';
+  } catch(e) {}
+}
+
+/* ── Tabs ── */
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  (btn || document.querySelector('.tab')).classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+  if (name === 'monitor') loadMonitor();
+}
+
+function showError(msg) { const e = document.getElementById('error-box'); e.textContent = '⚠ '+msg; e.style.display='block'; }
+function clearError()   { document.getElementById('error-box').style.display='none'; }
+
+document.getElementById('topic-input').addEventListener('keydown', e => { if (e.key==='Enter' && (e.ctrlKey||e.metaKey)) runStudy(); });
+
+loadProvider();
+</script>
+</body>
+</html>
