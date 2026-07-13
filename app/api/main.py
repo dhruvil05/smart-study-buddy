@@ -130,6 +130,7 @@ app.add_middleware(
 
 class StudyRequest(BaseModel):
     topic: str
+    quiz_type: str = "mcq"  # Question type: "mcq", "tf" (true/false), "fi" (fill-in), "sa" (short-answer)
     language: str | None = None  # Optional: explicit language override; falls back to current setting
 
 
@@ -212,6 +213,11 @@ async def study(req: StudyRequest):
     if not passed:
         raise HTTPException(400, reason)
 
+    # ── Configure quiz type for QuizMakerAgent ───────────────────────────────────
+    # Supported: mcq, tf (true/false), fi (fill-in), sa (short-answer)
+    quiz_type = req.quiz_type if req.quiz_type in ("mcq", "tf", "fi", "sa") else "mcq"
+    _quiz.quiz_type = quiz_type
+
     msg = Message(role=MessageRole.USER, parts=[Part(type=PartType.TEXT, content=req.topic)])
     try:
         validator.validate(msg)
@@ -291,6 +297,7 @@ async def study(req: StudyRequest):
             "meta": {
                 "provider": llm_mod.current_provider(),
                 "language": language,
+                "quiz_type": quiz_type,
                 "total_sec": round(total_sec, 2),
                 "orchestration": "ExplainerAgent → (QuizMakerAgent ‖ FlashcardAgent)",
                 "agents": ["ExplainerAgent", "QuizMakerAgent", "FlashcardAgent"],
