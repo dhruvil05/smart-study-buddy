@@ -79,6 +79,13 @@
   .btn-study:hover { background: #0C447C; }
   .btn-study:disabled { background: #b0c4de; cursor: not-allowed; }
 
+  /* Quiz type selector */
+  .quiz-type-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .quiz-type-label { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .quiz-type-select { font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; outline: none; transition: border-color .15s; color: var(--text); }
+  .quiz-type-select:hover { border-color: var(--accent); }
+  .quiz-type-select:focus { border-color: var(--accent); }
+
   /* Pipeline */
   .pipeline { display: flex; align-items: center; margin-bottom: 1.5rem; gap: 0; }
   .pipe-agent { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 10px; text-align: center; transition: all .3s; }
@@ -102,6 +109,12 @@
   /* Quiz */
   .quiz-q { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 12px; }
   .quiz-q .q-text { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
+  .q-badge { display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-l); border-radius: 20px; padding: 3px 10px; margin-bottom: 10px; }
+  .reveal-btn { padding: 8px 16px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+  .reveal-btn:hover { background: var(--accent-l); }
+  .answer-box { margin-top: 12px; background: var(--green-l); border: 1px solid var(--green); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.6; color: #085041; }
+  .answer-box .answer-text { margin-bottom: 6px; }
+  .answer-box .justification { color: #2f5d4a; border-top: 1px dashed rgba(29,158,117,.4); padding-top: 6px; }
   .options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .option { padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; background: var(--bg); }
   .option:hover   { border-color: var(--accent); background: var(--accent-l); }
@@ -225,6 +238,15 @@
       <textarea id="topic-input" placeholder="e.g. Photosynthesis, the French Revolution, Gradient Descent, Recursion in programming..."></textarea>
       <button class="btn-study" id="study-btn" onclick="runStudy()">Study it →</button>
     </div>
+    <div class="quiz-type-row">
+      <span class="quiz-type-label">Quiz format:</span>
+      <select class="quiz-type-select" id="quiz-type-select" title="Choose the type of quiz questions">
+        <option value="mcq">📝 Multiple Choice</option>
+        <option value="tf">✓✗ True / False</option>
+        <option value="fi">✏️ Fill in the Blank</option>
+        <option value="sa">💬 Short Answer</option>
+      </select>
+    </div>
   </div>
 
   <div class="error-box" id="error-box"></div>
@@ -241,7 +263,7 @@
       <div class="pipe-agent" id="ag-quiz">
         <div class="icon">❓</div>
         <div class="name">QuizMakerAgent</div>
-        <div class="sub">generate MCQs</div>
+        <div class="sub">build quizzes</div>
       </div>
       <div class="pipe-agent" id="ag-flash">
         <div class="icon">🃏</div>
@@ -291,7 +313,7 @@
 </div>
 
 <script>
-let quizData = [], quizAnswers = {}, flashcardData = [];
+let quizData = [], quizAnswers = {}, quizCorrect = {}, flashcardData = [];
 let selectedPill = 'anthropic';
 
 const loadingMessages = [
@@ -440,7 +462,11 @@ async function runStudy() {
     const res = await fetch('/api/study', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ topic, language: document.getElementById('lang-select').value }),
+      body: JSON.stringify({
+        topic,
+        language: document.getElementById('lang-select').value,
+        quiz_type: document.getElementById('quiz-type-select').value,
+      }),
     });
     clearInterval(interval);
     loading.classList.remove('show');
@@ -476,6 +502,7 @@ function renderResults(data) {
 
   quizData = data.quiz || [];
   quizAnswers = {};
+  quizCorrect = {};
   renderQuiz();
 
   flashcardData = data.flashcards || [];
@@ -487,35 +514,86 @@ function renderResults(data) {
 }
 
 /* ── Quiz ── */
+function quizType(q) { return q.type || 'mcq'; }
+
+function typeBadge(t) {
+  return ({ mcq: '📝 Multiple Choice', tf: '✓✗ True / False', fi: '✏️ Fill in the Blank', sa: '💬 Short Answer' })[t] || '📝 Multiple Choice';
+}
+
 function renderQuiz() {
   const c = document.getElementById('quiz-container');
   if (!quizData.length) { c.innerHTML = '<div class="empty">No quiz data available.</div>'; return; }
   document.getElementById('quiz-score').style.display = 'none';
-  c.innerHTML = quizData.map((q, qi) => `
-    <div class="quiz-q">
+  c.innerHTML = quizData.map((q, qi) => {
+    const t = quizType(q);
+    let body = '';
+    if (t === 'mcq') {
+      body = `<div class="options">` + (q.options||[]).map((opt,oi) =>
+        `<div class="option" id="opt-${qi}-${oi}" onclick="answerQ(${qi},'${esc(opt)}','${esc(q.answer)}')">${opt}</div>`).join('') + `</div>`;
+    } else if (t === 'tf') {
+      body = `<div class="options">
+        <div class="option" id="opt-${qi}-t" onclick="answerTF(${qi},true,${q.answer})">True</div>
+        <div class="option" id="opt-${qi}-f" onclick="answerTF(${qi},false,${q.answer})">False</div>
+      </div>`;
+    } else { // fi / sa — open-ended, reveal on demand
+      body = `<button class="reveal-btn" id="reveal-${qi}" onclick="revealAnswer(${qi})">Show answer</button>
+        <div class="answer-box" id="answer-${qi}" style="display:none">
+          <div class="answer-text"><strong>Answer:</strong> ${esc(q.answer)}</div>
+          ${q.justification ? `<div class="justification"><strong>Why:</strong> ${esc(q.justification)}</div>` : ''}
+        </div>`;
+    }
+    return `<div class="quiz-q">
+      <div class="q-badge">${typeBadge(t)}</div>
       <div class="q-text">${qi+1}. ${q.q}</div>
-      <div class="options">
-        ${(q.options||[]).map((opt,oi) => `<div class="option" id="opt-${qi}-${oi}" onclick="answerQ(${qi},'${esc(opt)}','${esc(q.answer)}')">${opt}</div>`).join('')}
-      </div>
-    </div>`).join('');
+      ${body}
+    </div>`;
+  }).join('');
 }
 
-function esc(s) { return (s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+function esc(s) { return (s==null?'':String(s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' '); }
 
 function answerQ(qi, chosen, correct) {
   if (quizAnswers[qi] !== undefined) return;
   quizAnswers[qi] = chosen;
+  quizCorrect[qi] = (chosen === correct);
   (quizData[qi].options||[]).forEach((opt, oi) => {
     const el = document.getElementById(`opt-${qi}-${oi}`);
-    if (opt === correct)                      el.classList.add('reveal');
-    if (opt === chosen && chosen !== correct)  el.classList.add('wrong');
-    if (opt === chosen && chosen === correct)  el.classList.add('correct');
+    if (opt === correct)                     el.classList.add('reveal');
+    if (opt === chosen && chosen !== correct) el.classList.add('wrong');
+    if (opt === chosen && chosen === correct) el.classList.add('correct');
   });
-  if (Object.keys(quizAnswers).length === quizData.length) {
-    const score = Object.entries(quizAnswers).filter(([i,a]) => a === quizData[i].answer).length;
+  updateScore();
+}
+
+function answerTF(qi, chosen, correct) {
+  if (quizAnswers[qi] !== undefined) return;
+  quizAnswers[qi] = chosen;
+  quizCorrect[qi] = (chosen === correct);
+  const tEl = document.getElementById(`opt-${qi}-t`);
+  const fEl = document.getElementById(`opt-${qi}-f`);
+  if (chosen === correct) {
+    (chosen ? tEl : fEl).classList.add('correct');
+  } else {
+    (chosen ? tEl : fEl).classList.add('wrong');
+    (correct ? tEl : fEl).classList.add('reveal');
+  }
+  updateScore();
+}
+
+function revealAnswer(qi) {
+  document.getElementById(`answer-${qi}`).style.display = 'block';
+  document.getElementById(`reveal-${qi}`).style.display = 'none';
+}
+
+function updateScore() {
+  const scorable = quizData.filter(q => { const t = quizType(q); return t === 'mcq' || t === 'tf'; });
+  const total = scorable.length;
+  const answered = Object.keys(quizCorrect).length;
+  if (total > 0 && answered === total) {
+    const score = Object.values(quizCorrect).filter(Boolean).length;
     const sc = document.getElementById('quiz-score');
     sc.style.display = 'block';
-    sc.textContent = `Score: ${score}/${quizData.length} — ${score===quizData.length?'🎉 Perfect!':score>=quizData.length/2?'👍 Good job!':'📚 Keep studying!'}`;
+    sc.textContent = `Score: ${score}/${total} — ${score===total?'🎉 Perfect!':score>=total/2?'👍 Good job!':'📚 Keep studying!'}`;
   }
 }
 

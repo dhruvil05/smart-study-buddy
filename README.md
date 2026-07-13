@@ -162,7 +162,7 @@ logging.basicConfig(level=logging.DEBUG)
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/` | GET | Frontend UI |
-| `/api/study` | POST | Run study pipeline (topic → explanation → quiz → flashcards) |
+| `/api/study` | POST | Run study pipeline (topic, optional `quiz_type` & `language` → explanation → quiz → flashcards) |
 | `/api/provider` | GET/POST | Get/set current LLM provider |
 | `/api/language` | GET/POST | Get/set the active response language (en, es, fr, zh, de) |
 | `/api/localize` | GET | Get localized UI strings for a language (`?lang=es`) |
@@ -193,9 +193,31 @@ topic language (falling back to your selection) and runs every agent with a
 language-specific prompt. Use the `/api/language` endpoint to inspect or switch
 the active language programmatically.
 
+## 🧩 Advanced Quiz Types
+
+The quiz generator supports four question formats, selected via the
+`quiz_type` field on `POST /api/study`:
+
+| `quiz_type` | Format | Answer field |
+|-------------|--------|--------------|
+| `mcq` (default) | Multiple choice, 4 options | `answer` = one of the options |
+| `tf` | True / False statement | `answer` = boolean |
+| `fi` | Fill-in-the-blank (uses `___`) | `answer` = missing phrase |
+| `sa` | Short answer | `answer` = 1–3 sentences |
+
+Every question also includes a `justification` field explaining the correct
+answer, and results are language-aware (see Multi-Language Support). Unknown
+`quiz_type` values fall back to `mcq`.
+
+Example:
+```bash
+curl -X POST http://localhost:8000/api/study \
+  -H "Content-Type: application/json" \
+  -d '{"topic":"Photosynthesis","quiz_type":"tf"}'
+```
+
 ## 🔮 Future Features (See `.claude/plan.md`)
 
-- Advanced quiz types (true/false, fill-in-blank)
 - Flashcard analytics for spaced repetition
 - Mobile PWA with offline sync
 - Collaborative study groups
