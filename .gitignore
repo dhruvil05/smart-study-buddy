@@ -12,3 +12,6 @@ wheels/
 # Environment variables
 .env
 .claude
+
+# Local SQLite analytics store
+analytics.db

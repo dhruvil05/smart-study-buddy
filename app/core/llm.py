@@ -6,9 +6,13 @@ interface. Provider selection is dynamic and can be switched at runtime via
 """
 from __future__ import annotations
 import os
+import logging
 from typing import Literal
 
-from app.core.config import PROVIDER_MODELS, Provider
+from app.core.config import PROVIDER_MODELS, Provider, LLM_CACHE_TTL
+from app.core.retry import retry, get_breaker
+
+logger = logging.getLogger(__name__)
 
 # Supported languages for localization
 SUPPORTED_LANGUAGES = {
@@ -127,8 +131,27 @@ def _add_language_context(prompt: str, language: str) -> str:
     return f"{lang_instruction}\n\n{prompt}"
 
 
-def _llm_anthropic(prompt: str, system: str, language: str = "en") -> str:
+def _with_retry_and_breaker(provider: str, fn, *args, **kwargs) -> str:
+    """Execute *fn* (the raw provider network call) with retry + circuit breaker.
+
+    Returns the provider text on success.  On repeated failure (or an open
+    breaker) returns an error sentinel that the rest of the pipeline treats as
+    "no data" (see ``_is_error_response`` in ``app/api/main.py``).
+    """
+    breaker = get_breaker(provider)
+    if breaker.is_open:
+        return f"[CircuitBreaker error: {provider} unavailable]"
     try:
+        text = retry(max_attempts=3)(fn)(*args, **kwargs)
+        breaker.record_success()
+        return text
+    except Exception as e:  # noqa: BLE001
+        breaker.record_failure()
+        return f"[{provider.capitalize()} error: {e}]"
+
+
+def _llm_anthropic(prompt: str, system: str, language: str = "en") -> str:
+    def _call():
         full_system = f"{system}\n\n{get_language_prompt_template(language)}" if system else get_language_prompt_template(language)
         resp = _get_anthropic().messages.create(
             model=PROVIDER_MODELS["anthropic"],
@@ -137,12 +160,12 @@ def _llm_anthropic(prompt: str, system: str, language: str = "en") -> str:
             messages=[{"role": "user", "content": _add_language_context(prompt, language)}],
         )
         return resp.content[0].text.strip()
-    except Exception as e:  # noqa: BLE001 - surface as recoverable string
-        return f"[Anthropic error: {e}]"
+
+    return _with_retry_and_breaker("anthropic", _call)
 
 
 def _llm_gemini(prompt: str, system: str, language: str = "en") -> str:
-    try:
+    def _call():
         from google.genai import types
         full_system = f"{system}\n\n{get_language_prompt_template(language)}" if system else get_language_prompt_template(language)
         resp = _get_gemini().models.generate_content(
@@ -151,12 +174,12 @@ def _llm_gemini(prompt: str, system: str, language: str = "en") -> str:
             config=types.GenerateContentConfig(max_output_tokens=1024),
         )
         return resp.text.strip()
-    except Exception as e:  # noqa: BLE001
-        return f"[Gemini error: {e}]"
+
+    return _with_retry_and_breaker("gemini", _call)
 
 
 def _llm_openrouter(prompt: str, system: str, language: str = "en") -> str:
-    try:
+    def _call():
         client = _get_openrouter()
         full_system = f"{system}\n\n{get_language_prompt_template(language)}" if system else get_language_prompt_template(language)
         resp = client.chat.completions.create(
@@ -166,20 +189,42 @@ def _llm_openrouter(prompt: str, system: str, language: str = "en") -> str:
             temperature=0.7,
         )
         return resp.choices[0].message.content.strip()
-    except Exception as e:  # noqa: BLE001
-        return f"[OpenRouter error: {e}]"
 
+    return _with_retry_and_breaker("openrouter", _call)
+
+
+from app.core import cache as cache_mod
 
 def llm(prompt: str, system: str = "", language: str = None) -> str:
-    """Route a prompt to the currently selected provider with optional language parameter."""
+    """Route a prompt to the currently selected provider with optional language parameter.
+
+    Responses are cached in Redis (if available) using a deterministic key based on
+    the provider, prompt, system message and language.  A cache hit returns the
+    stored value directly, avoiding an external API call.
+    """
     if language is None:
         language = get_current_language()
 
+    # Try cache first – only cache successful (non‑error) responses.
+    cached = cache_mod.get(_current_provider, prompt, system, language)
+    if cached is not None:
+        logger.info("LLM cache HIT for provider=%s lang=%s", _current_provider, language)
+        return cached
+
+    logger.info("LLM cache MISS for provider=%s lang=%s", _current_provider, language)
+
     if _current_provider == "openrouter":
-        return _llm_openrouter(prompt, system, language)
+        response = _llm_openrouter(prompt, system, language)
     elif _current_provider == "gemini":
-        return _llm_gemini(prompt, system, language)
-    return _llm_anthropic(prompt, system, language)
+        response = _llm_gemini(prompt, system, language)
+    else:
+        response = _llm_anthropic(prompt, system, language)
+
+    # Store in cache if the call succeeded (i.e., not an error sentinel).
+    is_error = response.lower().startswith("[") and "error" in response.lower()
+    if not is_error:
+        cache_mod.set(_current_provider, prompt, response, system, language, ttl=LLM_CACHE_TTL)
+    return response
 
 
 def set_provider(provider: str) -> Provider:

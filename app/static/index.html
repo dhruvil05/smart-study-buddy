@@ -286,6 +286,7 @@
       <button class="tab active" id="tab-explain" onclick="switchTab('explain',this)">📖 Explanation</button>
       <button class="tab" id="tab-quiz" onclick="switchTab('quiz',this)">❓ Quiz</button>
       <button class="tab" id="tab-flashcards" onclick="switchTab('flashcards',this)">🃏 Flashcards</button>
+      <button class="tab" id="tab-stream" onclick="switchTab('stream',this)">📡 Stream</button>
       <button class="tab" id="tab-monitor" onclick="switchTab('monitor',this)">📊 Monitor</button>
     </div>
 
@@ -305,8 +306,24 @@
 
     <div class="panel" id="panel-monitor">
       <div class="metrics-grid" id="metrics-grid"></div>
-      <h3 style="font-size:13px;font-weight:600;margin-bottom:8px;color:var(--muted)">Audit log (nexus-a2a)</h3>
+      <h3 style="font-size:13px;font-weight:600;margin:4px 0 8px;color:var(--muted)">Performance dashboard</h3>
+      <div class="metrics-grid" id="dashboard-grid"></div>
+      <h3 style="font-size:13px;font-weight:600;margin:4px 0 8px;color:var(--muted)">Audit log (nexus-a2a)</h3>
       <div class="audit-log" id="audit-log"></div>
+    </div>
+
+    <div class="panel" id="panel-stream">
+      <div class="input-card" style="margin-bottom:1rem">
+        <h2 style="font-size:14px;margin-bottom:6px">Stream a study session</h2>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Same pipeline as “Study it”, but the explanation is rendered incrementally as Server‑Sent Events arrive.</p>
+        <div class="input-row">
+          <textarea id="stream-topic" placeholder="e.g. Photosynthesis, the French Revolution..."></textarea>
+          <button class="btn-study" id="stream-btn" onclick="runStream()">Stream it →</button>
+        </div>
+      </div>
+      <div class="explanation-box" id="stream-explanation" style="white-space:pre-wrap;margin-bottom:1rem"></div>
+      <div id="stream-quiz"></div>
+      <div id="stream-flashcards" style="margin-top:1rem"></div>
     </div>
 
   </div>
@@ -615,14 +632,29 @@ function revealAll() { flashcardData.forEach((_,i) => document.getElementById(`f
 /* ── Monitor ── */
 async function loadMonitor() {
   try {
-    const [mRes, aRes] = await Promise.all([fetch('/api/metrics'), fetch('/api/audit')]);
-    const m = await mRes.json(), a = await aRes.json();
+    const [mRes, aRes, dRes] = await Promise.all([
+      fetch('/api/metrics'),
+      fetch('/api/audit'),
+      fetch('/api/metrics/dashboard'),
+    ]);
+    const m = await mRes.json(), a = await aRes.json(), d = await dRes.json();
     const pLabel = m.provider === 'gemini' ? 'Gemini 2.0 Flash' : 'Claude Haiku';
     document.getElementById('metrics-grid').innerHTML = `
       <div class="metric"><div class="val">${m.tasks_created}</div><div class="lbl">tasks created</div></div>
       <div class="metric"><div class="val">${m.tasks_completed}</div><div class="lbl">completed</div></div>
       <div class="metric"><div class="val">${m.tasks_failed}</div><div class="lbl">failed</div></div>
       <div class="metric"><div class="val">${m.agents_healthy}</div><div class="lbl">agents healthy</div></div>
+    `;
+    const c = d.cache || {}, r = d.retry || {}, fs = d.flashcard_stats || {};
+    document.getElementById('dashboard-grid').innerHTML = `
+      <div class="metric"><div class="val">${c.enabled ? 'on' : 'off'}</div><div class="lbl">cache</div></div>
+      <div class="metric"><div class="val">${c.hits||0}</div><div class="lbl">cache hits</div></div>
+      <div class="metric"><div class="val">${(c.hit_rate*100).toFixed(0)}%</div><div class="lbl">cache hit‑rate</div></div>
+      <div class="metric"><div class="val">${r.attempts||0}</div><div class="lbl">retry attempts</div></div>
+      <div class="metric"><div class="val">${r.failures||0}</div><div class="lbl">retry failures</div></div>
+      <div class="metric"><div class="val">${r.circuit_trips||0}</div><div class="lbl">circuit trips</div></div>
+      <div class="metric"><div class="val">${fs.total||0}</div><div class="lbl">flashcards</div></div>
+      <div class="metric"><div class="val">${fs.due_today||0}</div><div class="lbl">due now</div></div>
     `;
     document.getElementById('audit-log').innerHTML = [...a].reverse().map(e => `
       <div class="audit-row">
@@ -631,6 +663,124 @@ async function loadMonitor() {
         <span style="color:var(--muted);font-size:11px;white-space:nowrap">${new Date(e.ts*1000).toLocaleTimeString()}</span>
       </div>`).join('') || '<div style="font-size:13px;color:var(--muted)">No entries yet.</div>';
   } catch(e) {}
+}
+
+/* ── Streaming study ── */
+async function runStream() {
+  const topic = (document.getElementById('stream-topic').value || document.getElementById('topic-input').value).trim();
+  if (!topic) { showError('Enter a topic to stream.'); return; }
+  clearError();
+  document.getElementById('stream-explanation').textContent = '';
+  document.getElementById('stream-quiz').innerHTML = '';
+  document.getElementById('stream-flashcards').innerHTML = '';
+  document.getElementById('stream-btn').disabled = true;
+
+  try {
+    const res = await fetch('/api/study/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic,
+        language: document.getElementById('lang-select').value,
+        quiz_type: document.getElementById('quiz-type-select').value,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `Error ${res.status}` }));
+      showError(err.detail || `Error ${res.status}`);
+      document.getElementById('stream-btn').disabled = false;
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const ev = parseSSE(raw);
+        if (ev) handleStreamEvent(ev);
+      }
+    }
+  } catch(e) {
+    showError('Streaming failed: ' + e.message);
+  } finally {
+    document.getElementById('stream-btn').disabled = false;
+  }
+}
+
+function parseSSE(raw) {
+  let event = 'message', data = '';
+  raw.split('\n').forEach(line => {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    else if (line.startsWith('data:')) data += line.slice(5).trim();
+  });
+  if (!data) return null;
+  try { return { event, data: JSON.parse(data) }; }
+  catch (e) { return { event, data }; }
+}
+
+function handleStreamEvent(ev) {
+  if (ev.event === 'explanation') {
+    document.getElementById('stream-explanation').textContent += ev.data;
+  } else if (ev.event === 'quiz') {
+    renderStreamQuiz(ev.data || []);
+  } else if (ev.event === 'flashcards') {
+    renderStreamFlashcards(ev.data || []);
+  } else if (ev.event === 'error') {
+    showError(ev.data.detail || 'Stream error');
+  }
+}
+
+/* Render streamed quiz results with the same rich UI as the Quiz tab. */
+function renderStreamQuiz(quiz) {
+  const c = document.getElementById('stream-quiz');
+  if (!quiz.length) { c.innerHTML = '<div class="empty">No quiz data available.</div>'; return; }
+  c.innerHTML = '<h3 style="font-size:13px;font-weight:600;margin:8px 0 6px;color:var(--muted)">Quiz</h3>' + quiz.map((q, qi) => {
+    const t = q.type || 'mcq';
+    let body = '';
+    if (t === 'mcq') {
+      body = '<div class="options">' + (q.options||[]).map(opt => {
+        const correct = (opt === q.answer);
+        return `<div class="option ${correct ? 'reveal' : ''}">${esc(opt)}</div>`;
+      }).join('') + '</div>';
+    } else if (t === 'tf') {
+      const ans = !!q.answer;
+      body = `<div class="options">
+        <div class="option ${ans ? 'reveal' : ''}">True</div>
+        <div class="option ${!ans ? 'reveal' : ''}">False</div>
+      </div>`;
+    } else { // fi / sa — reveal answer on demand, with justification
+      body = `<button class="reveal-btn" onclick="this.nextElementSibling.style.display='block';this.style.display='none'">Show answer</button>
+        <div class="answer-box" style="display:none">
+          <div class="answer-text"><strong>Answer:</strong> ${esc(q.answer)}</div>
+          ${q.justification ? `<div class="justification"><strong>Why:</strong> ${esc(q.justification)}</div>` : ''}
+        </div>`;
+    }
+    return `<div class="quiz-q">
+      <div class="q-badge">${typeBadge(t)}</div>
+      <div class="q-text">${qi+1}. ${esc(q.q)}</div>
+      ${body}
+    </div>`;
+  }).join('');
+}
+
+/* Render streamed flashcards with the same flip‑card UI as the Flashcards tab. */
+function renderStreamFlashcards(fcs) {
+  const c = document.getElementById('stream-flashcards');
+  if (!fcs.length) { c.innerHTML = '<div class="empty">No flashcards available.</div>'; return; }
+  c.innerHTML = '<h3 style="font-size:13px;font-weight:600;margin:8px 0 6px;color:var(--muted)">Flashcards</h3>' +
+    '<div class="flashcards-grid">' + fcs.map((fc, i) => `
+      <div class="flashcard" id="sfc-${i}" onclick="document.getElementById('sfc-${i}').classList.toggle('flipped')">
+        <div class="fc-hint">tap to flip</div>
+        <div class="term">${esc(fc.term)}</div>
+        <div class="def">${esc(fc.definition)}</div>
+      </div>`).join('') + '</div>';
 }
 
 /* ── Tabs ── */

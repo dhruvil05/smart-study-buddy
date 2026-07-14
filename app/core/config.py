@@ -21,6 +21,9 @@ PROVIDER_COLORS = {
 
 DEFAULT_PROVIDER: Provider = "anthropic"
 
+# Cache TTL (seconds) for LLM responses stored in Redis.
+LLM_CACHE_TTL: int = int(os.environ.get("LLM_CACHE_TTL", "300"))
+
 
 def load_env() -> None:
     """Load variables from a local .env file (if present) into os.environ."""

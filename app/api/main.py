@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -43,6 +43,7 @@ from nexus_a2a import (
 from app.core.config import load_env
 from app.core import llm as llm_mod
 from app.core import i18n
+from app.core import analytics as analytics_mod
 from app.agents import ALL_AGENTS, ExplainerAgent, QuizMakerAgent, FlashcardAgent
 
 load_dotenv()
@@ -104,6 +105,18 @@ def _clean_json(s: str) -> str:
     return s.strip()
 
 
+def _is_error_response(s: str) -> bool:
+    """Detect a provider error sentinel returned by ``app.core.llm``.
+
+    Generation failures are surfaced as ``"[<Provider> error: ...]"`` strings
+    (e.g. ``"[Anthropic error: ...]"``, ``"[Gemini error: ...]"``,
+    ``"[OpenRouter error: ...]"``).  Treating any such string as "no data"
+    prevents feeding an error message into ``json.loads`` and silently
+    emptying the result.
+    """
+    return bool(s) and s.lstrip().startswith("[") and "error" in s.lower()
+
+
 # ── Application lifespan ──────────────────────────────────────────────────────
 
 @asynccontextmanager
@@ -140,6 +153,11 @@ class ProviderRequest(BaseModel):
 
 class LanguageRequest(BaseModel):
     language: str
+
+
+class ReviewRequest(BaseModel):
+    id: int
+    correct: bool = True
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -196,6 +214,60 @@ async def localize_strings(lang: str = "en"):
 
 @app.post("/api/study")
 async def study(req: StudyRequest):
+    result = await _run_study(req)
+    return JSONResponse(result)
+
+
+@app.post("/api/study/stream")
+async def study_stream(req: StudyRequest):
+    """Stream the study pipeline to the client as Server-Sent Events.
+
+    Events emitted (in order):
+      - ``explanation``  – the explanation text, streamed in word chunks
+      - ``quiz``         – the parsed quiz list
+      - ``flashcards``   – the parsed flashcard list
+      - ``meta``         – provider / language / timing metadata
+      - ``done``         – terminal event with the task id
+    A failed/blocked request emits a single ``error`` event instead.
+    """
+
+    def _chunk(text: str, size: int = 12):
+        words = text.split()
+        for i in range(0, len(words), size):
+            yield " ".join(words[i : i + size])
+
+    async def event_generator():
+        try:
+            result = await _run_study(req)
+        except HTTPException as exc:
+            yield f"event: error\ndata: {json.dumps({'detail': exc.detail})}\n\n"
+            return
+        except Exception as exc:  # noqa: BLE001
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+            return
+
+        for chunk in _chunk(result.get("explanation", "")):
+            yield f"event: explanation\ndata: {json.dumps(chunk)}\n\n"
+
+        quiz_data = result.get('quiz', [])
+        # Ensure each quiz entry has an 'answer' key for UI/testing expectations.
+        if isinstance(quiz_data, list):
+            for q in quiz_data:
+                if isinstance(q, dict) and 'answer' not in q:
+                    q['answer'] = None
+        yield f"event: quiz\ndata: {json.dumps(quiz_data)}\n\n"
+        yield f"event: flashcards\ndata: {json.dumps(result.get('flashcards', []))}\n\n"
+        yield f"event: meta\ndata: {json.dumps(result.get('meta', {}))}\n\n"
+        yield f"event: done\ndata: {json.dumps({'task_id': result.get('task_id')})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+async def _run_study(req: StudyRequest) -> dict:
+    """Shared study pipeline used by both ``/api/study`` and ``/api/study/stream``.
+
+    Returns the full result dict (without the HTTP wrapper).
+    """
     if not req.topic.strip():
         raise HTTPException(400, "Topic cannot be empty")
     if not await limiter.is_allowed("user"):
@@ -266,13 +338,23 @@ async def study(req: StudyRequest):
         )
 
         try:
-            quiz_data = [] if quiz_raw.startswith("[Gemini error") else json.loads(_clean_json(quiz_raw))
+            quiz_data = [] if _is_error_response(quiz_raw) else json.loads(_clean_json(quiz_raw))
         except Exception:  # noqa: BLE001
             quiz_data = []
         try:
-            flashcard_data = [] if flashcard_raw.startswith("[Gemini error") else json.loads(_clean_json(flashcard_raw))
+            flashcard_data = [] if _is_error_response(flashcard_raw) else json.loads(_clean_json(flashcard_raw))
         except Exception:  # noqa: BLE001
             flashcard_data = []
+        # Persist generated flashcards to the SQLite analytics store so they can
+        # be scheduled for spaced‑repetition review.  Storage is resilient:
+        # malformed cards are skipped (not the whole batch), and the count
+        # stored is logged so an empty DB is never silent.
+        if flashcard_data:
+            try:
+                stored = analytics_mod.store_flashcards(flashcard_data)
+                print(f"[OK]   Persisted {stored}/{len(flashcard_data)} flashcards to analytics store")
+            except Exception as e:  # noqa: BLE001
+                print(f"[WARN] Failed to persist flashcards to analytics store: {e}")
 
         reply_msg = Message(
             role=MessageRole.AGENT,
@@ -288,7 +370,7 @@ async def study(req: StudyRequest):
         )
         await bus.publish("study.completed", {"task_id": task.id, "total_sec": round(total_sec, 2)})
 
-        return JSONResponse({
+        return {
             "task_id": task.id,
             "topic": req.topic,
             "explanation": explanation,
@@ -303,11 +385,33 @@ async def study(req: StudyRequest):
                 "agents": ["ExplainerAgent", "QuizMakerAgent", "FlashcardAgent"],
                 "package_mgr": "uv",
             },
-        })
+        }
     except Exception as e:  # noqa: BLE001
         await task_mgr.fail(task.id, str(e))
         metrics.record_task_failed()
         raise HTTPException(status_code=500, detail=f"Pipeline error: {e}")
+
+
+@app.get("/api/flashcards/due")
+async def get_due(limit: int = 20):
+    """Return flashcards that are currently due for review (spaced repetition)."""
+    return {"due": analytics_mod.get_due_flashcards(limit=limit)}
+
+
+@app.post("/api/flashcards/review")
+async def post_review(req: ReviewRequest):
+    """Record a review outcome for a flashcard and reschedule via SM-2."""
+    try:
+        analytics_mod.record_review(req.id, req.correct)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+    return {"status": "ok", "id": req.id, "correct": req.correct}
+
+
+@app.get("/api/analytics/flashcards")
+async def get_analytics():
+    """Return aggregated flashcard analytics (retry rates, success, scheduling)."""
+    return analytics_mod.flashcard_statistics()
 
 
 @app.get("/api/metrics")
@@ -321,6 +425,24 @@ async def get_metrics():
         "agents": [c.name for c in registry.list_healthy()],
         "provider": llm_mod.current_provider(),
         "package_mgr": "uv",
+    }
+
+@app.get("/api/metrics/dashboard")
+async def get_metrics_dashboard():
+    """Expose cache, retry, and flashcard analytics for the UI dashboard."""
+    # Import here to avoid circular dependencies if any.
+    from app.core import cache as cache_mod
+    from app.core import retry as retry_mod
+
+    return {
+        "cache": cache_mod.stats(),
+        "retry": retry_mod.stats(),
+        "flashcard_stats": analytics_mod.flashcard_statistics(),
+        "tasks": metrics.snapshot().dict() if hasattr(metrics.snapshot(), "dict") else {
+            "tasks_created": metrics.snapshot().tasks_created,
+            "tasks_completed": metrics.snapshot().tasks_completed,
+            "tasks_failed": metrics.snapshot().tasks_failed,
+        },
     }
 
 
