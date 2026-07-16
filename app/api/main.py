@@ -6,6 +6,7 @@ Run:
   uv run python -m app.api.main
 """
 from __future__ import annotations
+import asyncio
 import json
 import os
 import time
@@ -56,13 +57,61 @@ task_mgr = TaskManager(store=store)
 registry = AgentRegistry()
 bus = EventBus()
 metrics = MetricsCollector()
-audit = AuditLogger()
+
+# ── Live audit broadcast (Server-Sent Events) ─────────────────────────────────
+# Every audit entry is mirrored into in-memory subscriber queues so the monitor
+# dashboard can render the audit log *live* as agents start and respond, instead
+# of polling every few seconds and missing the moment a run begins.
+_audit_subscribers: set = set()
+
+
+def _broadcast_audit(payload: dict) -> None:
+    """Push an audit/activity payload to every connected live monitor."""
+    for q in list(_audit_subscribers):
+        try:
+            q.put_nowait(payload)
+        except Exception:  # noqa: BLE001
+            _audit_subscribers.discard(q)
+
+
+class _StreamingAuditLogger(AuditLogger):
+    """AuditLogger that also broadcasts each entry to connected live monitors."""
+
+    def _log(self, entry) -> None:
+        super()._log(entry)
+        _broadcast_audit({"type": "audit", **_norm_audit(entry.to_dict())})
+
+
+audit = _StreamingAuditLogger()
 limiter = RateLimiter(default_config=RateLimitConfig(rate=10.0, burst=10.0))
 validator = PayloadValidator(config=ValidatorConfig(max_bytes=20_000))
 
 _explainer = ExplainerAgent()
 _quiz = QuizMakerAgent()
 _flashcard = FlashcardAgent()
+
+# ── Live agent tracking (for real-time monitor) ───────────────────────────────
+# Maps agent_url -> task_id of agents currently running. Lets the monitor drawer
+# show which agents are active *right now*, not just completed audit entries.
+_running_agents: dict[str, str] = {}
+
+
+def _track_agent_start(url: str, task_id: str) -> None:
+    _running_agents[url] = task_id
+    _broadcast_audit({"type": "agents", "running": [_agent_label(u) for u in _running_agents]})
+
+
+def _track_agent_finish(url: str, task_id: str) -> None:
+    _running_agents.pop(url, None)
+    _broadcast_audit({"type": "agents", "running": [_agent_label(u) for u in _running_agents]})
+
+
+def _agent_label(url: str) -> str:
+    if "8001" in url:
+        return "ExplainerAgent"
+    if "8002" in url:
+        return "QuizMakerAgent"
+    return "FlashcardAgent"
 
 
 # ── Agent runner ──────────────────────────────────────────────────────────────
@@ -72,6 +121,7 @@ async def _runner(url: str, message: Message) -> Task:
     task_id = str(uuid.uuid4())
     t = Task(id=task_id, history=[message])
     audit.agent_called(agent_url=url, task_id=task_id)
+    _track_agent_start(url, task_id)
     start = time.perf_counter()
 
     with metrics.record_agent_call(url):
@@ -82,13 +132,15 @@ async def _runner(url: str, message: Message) -> Task:
         else:
             text = await _flashcard.run(t)
 
-    metrics.record_call_duration(url, time.perf_counter() - start)
+    duration = time.perf_counter() - start
+    metrics.record_call_duration(url, duration)
     audit.agent_responded(
         agent_url=url,
         task_id=task_id,
-        duration_sec=0,
+        duration_sec=duration,
         succeeded=True,
     )
+    _track_agent_finish(url, task_id)
 
     reply = Message(role=MessageRole.AGENT, parts=[Part(type=PartType.TEXT, content=text)])
     return Task(id=task_id, state=TaskState.COMPLETED, history=[reply])
@@ -457,6 +509,75 @@ async def get_audit():
         }
         for e in audit.entries()[-30:]
     ]
+
+
+@app.get("/api/audit/stream")
+async def audit_stream():
+    """Stream audit + live agent-activity events to the monitor over SSE.
+
+    On connect the last 30 buffered audit entries are replayed (backlog), then
+    new events are pushed the instant they happen — so the dashboard shows an
+    agent start/response the moment it occurs, with no polling latency.
+    """
+    queue: asyncio.Queue = asyncio.Queue()
+    _audit_subscribers.add(queue)
+    backlog = audit.entries()[-30:]
+    marker = max((e.timestamp for e in backlog), default=0.0)
+
+    async def event_gen():
+        try:
+            # Initial state: who is running right now + recent backlog.
+            yield _sse("agents", {"type": "agents", "running": [_agent_label(u) for u in _running_agents]})
+            for e in backlog:
+                yield _sse("audit", _norm_audit(e.to_dict()))
+            # Live feed: forward everything logged after we subscribed.
+            while True:
+                item = await queue.get()
+                if item.get("type") == "audit" and item.get("ts", 0.0) <= marker:
+                    continue  # already delivered in the backlog replay
+                yield _sse(item["type"], item)
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _audit_subscribers.discard(queue)
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+def _norm_audit(d: dict) -> dict:
+    """Normalise a raw audit entry dict into the monitor's display shape.
+
+    The raw entry spreads its ``data`` payload to the top level (per
+    ``AuditEntry.to_dict``), so we forward every non-structural field into
+    ``event_data`` — letting the dashboard render rich, human-readable rows
+    (agent name, response duration, success flag, workflow timing) instead of
+    opaque URLs and bare event strings.
+    """
+    agent_url = d.get("agent_url") or ""
+    return {
+        "event": d.get("event"),
+        "event_data": {
+            k: v
+            for k, v in d.items()
+            if k not in ("event", "timestamp", "task_id", "agent_url")
+        },
+        "agent_url": agent_url or None,
+        "agent": _agent_label(agent_url) if agent_url else None,
+        "task_id": d.get("task_id"),
+        "ts": round(float(d.get("timestamp") or 0), 2),
+    }
+
+
+def _sse(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, default=str)}\n\n"
 
 
 @app.get("/", response_class=HTMLResponse)

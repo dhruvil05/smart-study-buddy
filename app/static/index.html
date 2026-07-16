@@ -5,38 +5,297 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Smart Study Buddy</title>
 <style>
+  /* ── Design Tokens ── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg:       #f7f6f3;
-    --surface:  #ffffff;
-    --border:   #e5e3dc;
-    --text:     #1a1a18;
-    --muted:    #6b6b66;
-    --accent:   #185FA5;
-    --accent-l: #E6F1FB;
-    --green:    #1D9E75;
-    --green-l:  #EAF3DE;
-    --amber:    #BA7517;
-    --amber-l:  #FAEEDA;
-    --red:      #A32D2D;
-    --red-l:    #FCEBEB;
-    --purple:   #534AB7;
-    --purple-l: #EEEDFE;
-    --radius:   10px;
+    /* Colors */
+    --bg:          #f7f6f3;
+    --surface:     #ffffff;
+    --border:      #e5e3dc;
+    --text:        #1a1a18;
+    --muted:       #6b6b66;
+    --accent:      #185FA5;
+    --accent-l:    #E6F1FB;
+    --accent-g:    #D4EDF9;
+    --green:       #1D9E75;
+    --green-l:     #EAF3DE;
+    --amber:       #BA7517;
+    --amber-l:     #FAEEDA;
+    --red:         #A32D2D;
+    --red-l:       #FCEBEB;
+    --purple:      #534AB7;
+    --purple-l:    #EEEDFE;
+    --drawer-bg:   #ffffff;
+    --radius:      12px;
+    --shadow-sm:   0 1px 3px rgba(0,0,0,.08);
+    --shadow-md:   0 4px 12px rgba(0,0,0,.08);
   }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
-  /* Header */
-  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; flex-wrap: wrap; gap: 8px; }
+  /* ── Header (Toolbar) ── */
+  .header {
+    background: linear-gradient(180deg, var(--surface) 0%, #faf9f6 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    flex-wrap: wrap;
+    gap: 8px;
+    box-shadow: var(--shadow-sm);
+  }
   .logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; }
-  .logo-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
+  .logo-icon { width: 34px; height: 34px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
   .badge-nexus { font-size: 11px; background: var(--purple-l); color: var(--purple); padding: 3px 9px; border-radius: 20px; font-weight: 500; }
-  .provider-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; cursor: pointer; transition: border-color .15s; }
+  .toolbar-right { display: flex; align-items: center; gap: 8px; }
+  .toolbar-btn {
+    width: 32px; height: 32px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px;
+    transition: all .15s;
+  }
+  .toolbar-btn:hover { background: var(--accent-l); border-color: var(--accent); }
+  .toolbar-btn.active { background: var(--accent-l); border-color: var(--accent); }
+  .toolbar-btn.active span { color: var(--accent); }
   .lang-select { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 10px; cursor: pointer; outline: none; transition: border-color .15s; color: var(--text); }
   .lang-select:hover { border-color: var(--accent); }
   .lang-select:focus { border-color: var(--accent); }
+  .provider-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; cursor: pointer; transition: border-color .15s; }
   .provider-badge:hover { border-color: var(--accent); }
   .provider-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+  /* ── Drawer System (IDE-style slide-out) ── */
+  .drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35);
+    z-index: 999; display: none; align-items: center; justify-content: flex-end;
+  }
+  .drawer-backdrop.show { display: flex; }
+  .drawer {
+    position: fixed; top: 0; right: -100%; width: min(420px, 92vw); height: 100vh;
+    background: var(--drawer-bg); border-left: 1px solid var(--border);
+    transition: right .28s cubic-bezier(.4,0,.2,1); z-index: 1000;
+    display: flex; flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0,0,0,.10);
+  }
+  .drawer.open { right: 0; }
+  .drawer-header {
+    flex-shrink: 0; padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .drawer-header h2 { font-size: 16px; font-weight: 600; color: var(--text); }
+  .drawer-close {
+    width: 28px; height: 28px; border-radius: 8px; background: var(--bg);
+    border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 14px; color: var(--muted); transition: all .15s;
+  }
+  .drawer-close:hover { background: var(--surface); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .drawer-body::-webkit-scrollbar { width: 8px; }
+  .drawer-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Stream drawer specific (redesigned: wider, resizable, tabbed) */
+  .stream-drawer { width: min(560px, 94vw); }
+  .drawer-resizer {
+    position: absolute; left: -5px; top: 0; width: 10px; height: 100%;
+    cursor: ew-resize; z-index: 6; touch-action: none;
+  }
+  .drawer-resizer::before {
+    content: ""; position: absolute; left: 4px; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 56px; border-radius: 3px; background: var(--border); transition: background .15s;
+  }
+  .drawer-resizer:hover::before, .stream-drawer.resizing .drawer-resizer::before { background: var(--accent); }
+
+  .stream-drawer .drawer-body {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px;
+    padding: 16px; overflow: hidden;
+  }
+  .stream-controls { flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+  .stream-controls .input-card { margin-bottom: 0; padding: 1rem; }
+
+  .stream-agent-strip { display: flex; gap: 8px; }
+  .agent-chip {
+    flex: 1; min-width: 80px; text-align: center; padding: 9px 6px; background: var(--bg);
+    border-radius: 10px; border: 1px solid var(--border); font-size: 11px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: all .2s;
+  }
+  .agent-chip.active { background: var(--accent-l); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-l); }
+  .agent-chip.done { background: var(--green-l); border-color: var(--green); }
+  .agent-chip .icon { font-size: 16px; }
+  .agent-chip .name { font-weight: 500; }
+  .agent-chip .status { font-size: 9px; color: var(--muted); }
+  .agent-chip.active .status, .agent-chip.done .status { color: var(--text); }
+  .typing-indicator { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-left: 4px; animation: pulse .8s infinite; }
+  @keyframes pulse { 0%, 60% { opacity: .4; } 80% { opacity: 1; } }
+
+  /* Stream tabs */
+  .stream-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .stream-tab {
+    position: relative; flex: 1; padding: 9px 8px; font-size: 12.5px; font-weight: 500;
+    border: none; background: none; cursor: pointer; color: var(--muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .stream-tab:hover { color: var(--text); }
+  .stream-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    opacity: 0; transform: scale(.3); transition: opacity .2s, transform .2s; box-shadow: 0 0 6px var(--accent);
+  }
+  .tab-dot.show { opacity: 1; transform: scale(1); animation: tab-pop .4s ease; }
+  @keyframes tab-pop { 0% { transform: scale(0); } 60% { transform: scale(1.4); } 100% { transform: scale(1); } }
+
+  .stream-tab-body { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+  .stream-tab-body::-webkit-scrollbar { width: 8px; }
+  .stream-tab-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .stream-panel { display: none; }
+  .stream-panel.active { display: block; }
+
+  .stream-empty { text-align: center; color: var(--muted); font-size: 13px; padding: 2.5rem 1rem; line-height: 1.6; }
+  .stream-empty .se-ico { font-size: 30px; display: block; margin-bottom: 8px; opacity: .55; }
+
+  .stream-quiz-score {
+    background: var(--accent-l); border: 1px solid var(--accent); border-radius: var(--radius);
+    padding: 11px 14px; margin-bottom: 12px; font-size: 13.5px; font-weight: 500; color: var(--accent); display: none;
+  }
+
+  /* Stream message cards */
+  .stream-messages { display: flex; flex-direction: column; gap: 12px; }
+  .stream-msg {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px; box-shadow: var(--shadow-sm);
+  }
+  .stream-msg-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+  .stream-msg-icon { width: 24px; height: 24px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .stream-msg-name { font-weight: 500; color: var(--text); }
+  .stream-msg-role { font-size: 10px; background: var(--border); color: var(--muted); padding: 2px 6px; border-radius: 6px; }
+  .stream-msg-time { margin-left: auto; font-size: 10px; color: var(--muted); }
+  .stream-msg-body { font-size: 14px; line-height: 1.5; color: var(--text); }
+  .stream-caret { display: inline-block; width: 10px; background: var(--accent); border-radius: 2px; margin-left: 2px; animation: blink .8s infinite; }
+  @keyframes blink { 0%, 50% { opacity: .7; } 100% { opacity: 0; } }
+
+  /* ── Monitor Drawer — modern dark observability console ── */
+  .monitor-drawer {
+    background: #0e1322;
+    background-image: radial-gradient(120% 80% at 100% 0%, rgba(91,140,255,.10), transparent 60%),
+                      radial-gradient(120% 80% at 0% 100%, rgba(45,212,191,.08), transparent 55%);
+    border-left: 1px solid rgba(255,255,255,.07);
+    color: #e8ecf5;
+  }
+  .monitor-header {
+    flex-shrink: 0; padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(180deg, rgba(91,140,255,.14), rgba(91,140,255,0));
+  }
+  .monitor-title { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .monitor-logo {
+    width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 17px; background: rgba(91,140,255,.18); border: 1px solid rgba(91,140,255,.30);
+    box-shadow: 0 0 16px rgba(91,140,255,.25);
+  }
+  .monitor-titles { line-height: 1.15; }
+  .monitor-h-title { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: .2px; }
+  .monitor-h-sub { font-size: 10.5px; color: #8b94ad; text-transform: uppercase; letter-spacing: 1px; }
+  .monitor-close { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.10); color: #aeb6cc; }
+  .monitor-close:hover { background: rgba(248,113,113,.16); border-color: rgba(248,113,113,.4); color: #fca5a5; }
+
+  /* connection status pill */
+  .monitor-conn {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 20px; margin-left: 10px; white-space: nowrap;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.10); color: #8b94ad;
+  }
+  .monitor-conn .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: #8b94ad; }
+  .monitor-conn[data-state="live"]      { color: #6ee7b7; background: rgba(52,211,153,.12); border-color: rgba(52,211,153,.30); }
+  .monitor-conn[data-state="live"] .conn-dot { background: #34d399; box-shadow: 0 0 8px #34d399; animation: conn-pulse 1.4s infinite; }
+  .monitor-conn[data-state="connecting"] .conn-dot { background: #fbbf24; animation: conn-pulse 1s infinite; }
+  .monitor-conn[data-state="reconnecting"] { color: #fbbf24; background: rgba(251,191,36,.12); border-color: rgba(251,191,36,.30); }
+  .monitor-conn[data-state="reconnecting"] .conn-dot { background: #fbbf24; animation: conn-pulse 1s infinite; }
+  @keyframes conn-pulse { 0%,60% { opacity: .45; } 100% { opacity: 1; } }
+
+  .monitor-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 16px; overflow: hidden; }
+  .mon-section { flex-shrink: 0; }
+  .mon-section-grow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .mon-section-title {
+    display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.2px; color: #8b94ad; margin-bottom: 9px;
+  }
+  .mon-section-ico { font-size: 12px; }
+  .mon-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399; margin-left: auto; animation: conn-pulse 1.4s infinite; }
+
+  /* live-now agent panel */
+  .mon-agents { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mon-agent-chip {
+    display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+    padding: 11px 6px; border-radius: 12px; background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.07); transition: all .25s;
+  }
+  .mon-agent-chip.live {
+    background: linear-gradient(180deg, rgba(91,140,255,.16), rgba(91,140,255,.05));
+    border-color: rgba(91,140,255,.40); box-shadow: 0 0 18px rgba(91,140,255,.20);
+  }
+  .mon-agent-ic {
+    width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; background: rgba(255,255,255,.06);
+  }
+  .mon-agent-name { font-size: 11px; font-weight: 600; color: #e8ecf5; }
+  .mon-agent-status { font-size: 9.5px; color: #8b94ad; display: flex; align-items: center; gap: 5px; }
+  .mon-agent-pulse { width: 6px; height: 6px; border-radius: 50%; background: #5b8cff; box-shadow: 0 0 6px #5b8cff; animation: conn-pulse 1s infinite; }
+  .mon-agent-elapsed { color: #cbd5f5; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .mon-idle { font-size: 12px; color: #6b7390; padding: 10px 12px; border: 1px dashed rgba(255,255,255,.10); border-radius: 12px; text-align: center; }
+
+  /* stat cards */
+  .mon-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .mon-stats-4 { grid-template-columns: repeat(4, 1fr); }
+  .mon-stat {
+    display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-radius: 12px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07);
+    transition: transform .15s, border-color .15s;
+  }
+  .mon-stat:hover { transform: translateY(-2px); border-color: rgba(91,140,255,.35); }
+  .mon-stat-ic {
+    width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; background: rgba(91,140,255,.14); flex-shrink: 0;
+  }
+  .mon-stat-body { min-width: 0; }
+  .mon-stat-val { font-size: 19px; font-weight: 700; color: #fff; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .mon-stat-lbl { font-size: 10px; color: #8b94ad; text-transform: uppercase; letter-spacing: .6px; }
+
+  /* live audit feed */
+  .mon-audit { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+  .mon-audit::-webkit-scrollbar { width: 6px; }
+  .mon-audit::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+  .mon-audit-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 10px;
+    background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.06);
+    border-left: 3px solid var(--accent, #5b8cff); animation: audit-in .35s ease;
+  }
+  @keyframes audit-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  .mon-audit-ic {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0; background: rgba(91,140,255,.16);
+  }
+  .mon-audit-main { flex: 1; min-width: 0; }
+  .mon-audit-title { font-size: 12.5px; font-weight: 600; color: #e8ecf5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mon-audit-sub { font-size: 10.5px; color: #8b94ad; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .mon-audit-time { font-size: 10px; color: #6b7390; white-space: nowrap; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+  /* event-type accents */
+  .ev-task   { border-left-color: #60a5fa; } .ev-task   .mon-audit-ic { background: rgba(96,165,250,.18); }
+  .ev-call   { border-left-color: #818cf8; } .ev-call   .mon-audit-ic { background: rgba(129,140,248,.18); }
+  .ev-resp   { border-left-color: #34d399; } .ev-resp   .mon-audit-ic { background: rgba(52,211,153,.18); }
+  .ev-done   { border-left-color: #2dd4bf; } .ev-done   .mon-audit-ic { background: rgba(45,212,191,.18); }
+  .ev-err    { border-left-color: #f87171; } .ev-err    .mon-audit-ic { background: rgba(248,113,113,.18); }
+  .ev-warn   { border-left-color: #fbbf24; } .ev-warn   .mon-audit-ic { background: rgba(251,191,36,.18); }
+  .ev-state  { border-left-color: #94a3b8; } .ev-state  .mon-audit-ic { background: rgba(148,163,184,.18); }
+  .ev-custom { border-left-color: #c084fc; } .ev-custom .mon-audit-ic { background: rgba(192,132,252,.18); }
+  .audit-placeholder { font-size: 12.5px; color: #6b7390; padding: 14px; text-align: center; }
+
+  @media(max-width:600px) {
+    .mon-stats-4 { grid-template-columns: repeat(2, 1fr); }
+    .mon-agents { grid-template-columns: repeat(3, 1fr); }
+  }
 
   /* Modal overlay */
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; align-items: center; justify-content: center; }
@@ -44,11 +303,11 @@
   .modal { background: var(--surface); border-radius: var(--radius); padding: 1.5rem; width: 420px; max-width: 95vw; border: 1px solid var(--border); }
   .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
   .modal p  { font-size: 13px; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.5; }
-  .provider-pills { display: flex; gap: 8px; margin-bottom: 1.25rem; }
-  .pill { flex: 1; padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius); cursor: pointer; text-align: center; transition: all .15s; background: var(--bg); }
+  .provider-pills { display: flex; gap: 8px; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .pill { flex: 1; min-width: 100px; padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius); cursor: pointer; text-align: center; transition: all .15s; background: var(--bg); font-size: 12px; }
   .pill:hover { border-color: var(--accent); }
   .pill.selected { border-color: var(--accent); background: var(--accent-l); }
-  .pill .pill-name { font-size: 14px; font-weight: 600; margin-top: 6px; }
+  .pill .pill-name { font-size: 14px; font-weight: 600; margin-top: 4px; }
   .pill .pill-model { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .pill-icon { font-size: 24px; }
   .key-row { margin-bottom: 10px; }
@@ -69,13 +328,13 @@
   .container { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
 
   /* Input card */
-  .input-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .input-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); }
   .input-card h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
   .input-card p  { font-size: 13px; color: var(--muted); margin-bottom: 1rem; line-height: 1.5; }
   .input-row { display: flex; gap: 10px; }
-  textarea { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 80px; outline: none; transition: border .15s; }
+  textarea { flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; min-height: 80px; outline: none; transition: border .15s; background: var(--bg); }
   textarea:focus { border-color: var(--accent); }
-  .btn-study { padding: 10px 24px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; white-space: nowrap; align-self: flex-end; }
+  .btn-study { padding: 10px 24px; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s, transform .1s; white-space: nowrap; align-self: flex-end; }
   .btn-study:hover { background: #0C447C; }
   .btn-study:disabled { background: #b0c4de; cursor: not-allowed; }
 
@@ -104,10 +363,10 @@
   .panel { display: none; } .panel.active { display: block; }
 
   /* Explanation */
-  .explanation-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; line-height: 1.8; font-size: 14px; white-space: pre-wrap; }
+  .explanation-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; line-height: 1.8; font-size: 14px; white-space: pre-wrap; box-shadow: var(--shadow-sm); }
 
   /* Quiz */
-  .quiz-q { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 12px; }
+  .quiz-q { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
   .quiz-q .q-text { font-size: 14px; font-weight: 500; margin-bottom: 12px; }
   .q-badge { display: inline-block; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-l); border-radius: 20px; padding: 3px 10px; margin-bottom: 10px; }
   .reveal-btn { padding: 8px 16px; border: 1px solid var(--accent); background: var(--surface); color: var(--accent); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
@@ -115,7 +374,7 @@
   .answer-box { margin-top: 12px; background: var(--green-l); border: 1px solid var(--green); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.6; color: #085041; }
   .answer-box .answer-text { margin-bottom: 6px; }
   .answer-box .justification { color: #2f5d4a; border-top: 1px dashed rgba(29,158,117,.4); padding-top: 6px; }
-  .options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .options { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
   .option { padding: 9px 14px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; background: var(--bg); }
   .option:hover   { border-color: var(--accent); background: var(--accent-l); }
   .option.correct { background: var(--green-l); border-color: var(--green); color: #085041; }
@@ -125,8 +384,8 @@
 
   /* Flashcards */
   .flashcards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-  .flashcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; cursor: pointer; transition: all .2s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; }
-  .flashcard:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); transform: translateY(-1px); }
+  .flashcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; cursor: pointer; transition: all .2s; min-height: 110px; display: flex; flex-direction: column; justify-content: center; position: relative; box-shadow: var(--shadow-sm); }
+  .flashcard:hover { box-shadow: 0 6px 16px rgba(0,0,0,.12); transform: translateY(-2px); }
   .flashcard .term { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 8px; }
   .flashcard .def  { font-size: 13px; color: var(--muted); line-height: 1.5; display: none; }
   .flashcard.flipped .def  { display: block; }
@@ -142,17 +401,6 @@
   .dot-accent { background: var(--accent); }
   .dot-amber  { background: var(--amber); }
   .dot-purple { background: var(--purple); }
-
-  /* Monitor */
-  .metrics-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.5rem; }
-  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
-  .metric .val { font-size: 24px; font-weight: 600; }
-  .metric .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .audit-log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; max-height: 260px; overflow-y: auto; }
-  .audit-row { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-  .audit-row:last-child { border-bottom: none; }
-  .evt-badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; background: var(--accent-l); color: var(--accent); white-space: nowrap; }
-  .audit-url { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Loading */
   .loading { display: none; flex-direction: column; align-items: center; gap: 12px; padding: 2rem; }
@@ -170,6 +418,8 @@
     .pipeline { flex-direction: column; }
     .pipe-arrow { transform: rotate(90deg); }
     .header { height: auto; padding: 10px 1rem; }
+    .drawer { width: min(300px, 92vw); }
+    .stream-drawer { width: 92vw; }
   }
 </style>
 </head>
@@ -207,13 +457,116 @@
   </div>
 </div>
 
+<!-- Drawer backdrop -->
+<div class="drawer-backdrop" id="drawer-backdrop"></div>
+
+<!-- Stream Drawer (IDE-style slide-out, redesigned: resizable + tabbed modules) -->
+<div class="drawer stream-drawer" id="stream-drawer">
+  <div class="drawer-resizer" id="stream-resizer" title="Drag to resize"></div>
+  <div class="drawer-header">
+    <h2>📡 Stream</h2>
+    <button class="drawer-close" onclick="closeDrawer('stream')">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="stream-controls">
+      <div class="input-card">
+        <h2 style="font-size:14px;margin-bottom:6px">Stream a study session</h2>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Explanations stream live, then quizzes &amp; flashcards land in their own tabs.</p>
+        <div class="input-row">
+          <textarea id="stream-topic" placeholder="e.g. Photosynthesis, the French Revolution..."></textarea>
+          <button class="btn-study" id="stream-btn" onclick="runStream()">Stream it →</button>
+        </div>
+      </div>
+
+      <!-- Agent status strip -->
+      <div class="stream-agent-strip">
+        <div class="agent-chip" id="chip-explain"><div class="icon">🔍</div><div class="name">Explainer</div><div class="status" id="status-explain">pending</div></div>
+        <div class="agent-chip" id="chip-quiz"><div class="icon">❓</div><div class="name">QuizMaker</div><div class="status" id="status-quiz">pending</div></div>
+        <div class="agent-chip" id="chip-flash"><div class="icon">🃏</div><div class="name">Flashcard</div><div class="status" id="status-flash">pending</div></div>
+      </div>
+
+      <!-- Module tabs -->
+      <div class="stream-tabs">
+        <button class="stream-tab active" data-tab="live" onclick="switchStreamTab('live',this)">💬 Live</button>
+        <button class="stream-tab" data-tab="quiz" onclick="switchStreamTab('quiz',this)">❓ Quiz <span class="tab-dot" id="dot-quiz"></span></button>
+        <button class="stream-tab" data-tab="cards" onclick="switchStreamTab('cards',this)">🃏 Cards <span class="tab-dot" id="dot-cards"></span></button>
+      </div>
+    </div>
+
+    <div class="stream-tab-body">
+      <div class="stream-panel active" id="stream-panel-live">
+        <div class="stream-messages" id="stream-messages">
+          <div class="stream-empty"><span class="se-ico">📡</span>Start a stream to watch agents work in real time.</div>
+        </div>
+      </div>
+      <div class="stream-panel" id="stream-panel-quiz">
+        <div class="stream-quiz-score" id="stream-quiz-score"></div>
+        <div id="stream-quiz-container">
+          <div class="stream-empty"><span class="se-ico">❓</span>Quiz appears here once QuizMakerAgent finishes.</div>
+        </div>
+      </div>
+      <div class="stream-panel" id="stream-panel-cards">
+        <div id="stream-cards-container">
+          <div class="stream-empty"><span class="se-ico">🃏</span>Flashcards appear here once FlashcardAgent finishes.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Monitor Drawer (Live observability console) -->
+<div class="drawer monitor-drawer" id="monitor-drawer">
+  <div class="monitor-header">
+    <div class="monitor-title">
+      <span class="monitor-logo">📊</span>
+      <div class="monitor-titles">
+        <div class="monitor-h-title">Monitor</div>
+        <div class="monitor-h-sub">live agent console</div>
+      </div>
+      <span class="monitor-conn" id="monitor-conn" data-state="connecting">
+        <span class="conn-dot"></span><span id="monitor-conn-text">connecting…</span>
+      </span>
+    </div>
+    <button class="drawer-close monitor-close" onclick="closeDrawer('monitor')">✕</button>
+  </div>
+
+  <div class="monitor-body">
+    <div class="mon-section">
+      <div class="mon-section-title"><span class="mon-section-ico">⚡</span>Live now</div>
+      <div class="mon-agents" id="monitor-agents">
+        <div class="mon-idle">No active agents — idle</div>
+      </div>
+    </div>
+
+    <div class="mon-section">
+      <div class="mon-section-title"><span class="mon-section-ico">📈</span>Pipeline</div>
+      <div class="mon-stats" id="metrics-grid-live"></div>
+    </div>
+
+    <div class="mon-section">
+      <div class="mon-section-title"><span class="mon-section-ico">⚡</span>Cache</div>
+      <div class="mon-stats mon-stats-4" id="cache-grid-live"></div>
+    </div>
+
+    <div class="mon-section mon-section-grow">
+      <div class="mon-section-title">
+        <span class="mon-section-ico">🪵</span>Audit log
+        <span class="mon-live-dot" title="streaming live"></span>
+      </div>
+      <div class="mon-audit" id="audit-log-live"></div>
+    </div>
+  </div>
+</div>
+
 <header class="header">
   <div class="logo">
     <div class="logo-icon">🧠</div>
     Smart Study Buddy
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
+  <div class="toolbar-right">
     <span class="badge-nexus">powered by nexus-a2a</span>
+    <button class="toolbar-btn" id="btn-stream" onclick="openDrawer('stream')" title="Stream">📡</button>
+    <button class="toolbar-btn" id="btn-monitor" onclick="openDrawer('monitor')" title="Monitor">📊</button>
     <select class="lang-select" id="lang-select" onchange="onLanguageChange()" title="Language">
       <option value="en">🇬🇧 English</option>
       <option value="es">🇪🇸 Español</option>
@@ -286,8 +639,6 @@
       <button class="tab active" id="tab-explain" onclick="switchTab('explain',this)">📖 Explanation</button>
       <button class="tab" id="tab-quiz" onclick="switchTab('quiz',this)">❓ Quiz</button>
       <button class="tab" id="tab-flashcards" onclick="switchTab('flashcards',this)">🃏 Flashcards</button>
-      <button class="tab" id="tab-stream" onclick="switchTab('stream',this)">📡 Stream</button>
-      <button class="tab" id="tab-monitor" onclick="switchTab('monitor',this)">📊 Monitor</button>
     </div>
 
     <div class="panel active" id="panel-explain">
@@ -304,34 +655,17 @@
       <div class="flashcards-grid" id="flashcards-container"></div>
     </div>
 
-    <div class="panel" id="panel-monitor">
-      <div class="metrics-grid" id="metrics-grid"></div>
-      <h3 style="font-size:13px;font-weight:600;margin:4px 0 8px;color:var(--muted)">Performance dashboard</h3>
-      <div class="metrics-grid" id="dashboard-grid"></div>
-      <h3 style="font-size:13px;font-weight:600;margin:4px 0 8px;color:var(--muted)">Audit log (nexus-a2a)</h3>
-      <div class="audit-log" id="audit-log"></div>
-    </div>
-
-    <div class="panel" id="panel-stream">
-      <div class="input-card" style="margin-bottom:1rem">
-        <h2 style="font-size:14px;margin-bottom:6px">Stream a study session</h2>
-        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Same pipeline as “Study it”, but the explanation is rendered incrementally as Server‑Sent Events arrive.</p>
-        <div class="input-row">
-          <textarea id="stream-topic" placeholder="e.g. Photosynthesis, the French Revolution..."></textarea>
-          <button class="btn-study" id="stream-btn" onclick="runStream()">Stream it →</button>
-        </div>
-      </div>
-      <div class="explanation-box" id="stream-explanation" style="white-space:pre-wrap;margin-bottom:1rem"></div>
-      <div id="stream-quiz"></div>
-      <div id="stream-flashcards" style="margin-top:1rem"></div>
-    </div>
-
   </div>
 </div>
 
 <script>
 let quizData = [], quizAnswers = {}, quizCorrect = {}, flashcardData = [];
+// Stream-specific state — kept separate from the main quiz so answering in one
+// does not leak/block the other (previously both shared the same globals).
+let streamQuizData = [], streamQuizAnswers = {}, streamQuizCorrect = {}, streamFcsData = [];
 let selectedPill = 'anthropic';
+let monitorInterval = null;
+let streamCurrentMsg = null;
 
 const loadingMessages = [
   'ExplainerAgent is reading your topic...',
@@ -340,6 +674,222 @@ const loadingMessages = [
   'Assembling results...',
   'Running with OpenRouter AI...',
 ];
+
+/* ── Drawer System ── */
+function openDrawer(id, showBackdrop = true) {
+  closeAllDrawers();
+  if (showBackdrop) document.getElementById('drawer-backdrop').classList.add('show');
+  document.getElementById(id + '-drawer').classList.add('open');
+  if (id === 'monitor') startMonitorLive();
+}
+function closeDrawer(id) {
+  const backdrop = document.getElementById('drawer-backdrop');
+  const drawer = document.getElementById(id + '-drawer');
+  if (drawer) drawer.classList.remove('open');
+  if (id === 'monitor' && monitorInterval) { stopMonitorLive(); }
+  backdrop.classList.remove('show');
+}
+function closeAllDrawers() {
+  document.getElementById('drawer-backdrop').classList.remove('show');
+  ['stream', 'monitor'].forEach(id => {
+    const d = document.getElementById(id + '-drawer');
+    if (d) d.classList.remove('open');
+  });
+}
+
+/* ── Stream Agent Status ── */
+function updateStreamAgent(agent, state) {
+  const chip = document.getElementById('chip-' + agent);
+  const status = document.getElementById('status-' + agent);
+  if (chip && status) {
+    chip.classList.remove('active', 'done');
+    if (state === 'active') { chip.classList.add('active'); status.innerHTML = 'typing... <span class="typing-indicator"></span>'; }
+    else if (state === 'done') { chip.classList.add('done'); status.textContent = 'done'; }
+    else { status.textContent = 'pending'; }
+  }
+}
+
+/* ── Stream Message Rendering ── */
+function renderStreamMessage(agent, role, content, isStreaming = false) {
+  const container = document.getElementById('stream-messages');
+  const msgId = agent + '-' + Date.now();
+  const msgCard = document.createElement('div');
+  msgCard.id = msgId;
+  msgCard.className = 'stream-msg';
+  const icons = { explain: '🔍', quiz: '❓', flashcards: '🃏' };
+  const names = { explain: 'ExplainerAgent', quiz: 'QuizMakerAgent', flashcards: 'FlashcardAgent' };
+  msgCard.innerHTML = `
+    <div class="stream-msg-header">
+      <span class="stream-msg-icon">${icons[agent] || '🤖'}</span>
+      <span class="stream-msg-name">${names[agent] || agent}</span>
+      <span class="stream-msg-role">${role}</span>
+      <span class="stream-msg-time">${new Date().toLocaleTimeString()}</span>
+    </div>
+    <div class="stream-msg-body" id="${msgId}-body">${content}${isStreaming ? '<span class="stream-caret"></span>' : ''}</div>
+  `;
+  container.appendChild(msgCard);
+  streamLiveScrolled();
+  return msgId;
+}
+
+function updateStreamMessageContent(msgId, newContent, isStreaming = false) {
+  const body = document.getElementById(msgId + '-body');
+  if (body) {
+    body.innerHTML = newContent + (isStreaming ? '<span class="stream-caret"></span>' : '');
+    streamLiveScrolled();
+  }
+}
+
+/* ── Stream Quiz Rendering (Interactive, decoupled from main quiz) ──
+   Options carry their data via data-* attributes and handlers are attached with
+   addEventListener, so option text containing quotes/apostrophes can never break
+   the markup (the old inline onclick reused the same globals as the main quiz). */
+function renderStreamInteractiveQuiz(quiz) {
+  streamQuizData = quiz || [];
+  const c = document.getElementById('stream-quiz-container');
+  if (!streamQuizData.length) {
+    c.innerHTML = '<div class="stream-empty"><span class="se-ico">❓</span>No quiz generated.</div>';
+    return;
+  }
+  c.innerHTML = streamQuizData.map(renderStreamQuizItem).join('');
+  attachStreamQuizHandlers();
+  showStreamTabDot('quiz');
+}
+
+function renderStreamQuizItem(q, qi) {
+  const t = q.type || 'mcq';
+  let body = '';
+  if (t === 'mcq') {
+    body = `<div class="options">` + (q.options||[]).map((opt, oi) =>
+      `<div class="option" data-qi="${qi}" data-oi="${oi}">${htmlesc(opt)}</div>`).join('') + `</div>`;
+  } else if (t === 'tf') {
+    body = `<div class="options">
+      <div class="option" data-qi="${qi}" data-tf="true">True</div>
+      <div class="option" data-qi="${qi}" data-tf="false">False</div>
+    </div>`;
+  } else {
+    body = `<button class="reveal-btn" data-reveal="${qi}">Show answer</button>
+      <div class="answer-box" id="stream-answer-${qi}" style="display:none">
+        <div class="answer-text"><strong>Answer:</strong> ${htmlesc(q.answer)}</div>
+        ${q.justification ? `<div class="justification"><strong>Why:</strong> ${htmlesc(q.justification)}</div>` : ''}
+      </div>`;
+  }
+  return `<div class="quiz-q">
+    <div class="q-badge">${typeBadge(t)}</div>
+    <div class="q-text">${qi+1}. ${htmlesc(q.q)}</div>
+    ${body}
+  </div>`;
+}
+
+function attachStreamQuizHandlers() {
+  const c = document.getElementById('stream-quiz-container');
+  c.querySelectorAll('.option').forEach(el => {
+    el.addEventListener('click', () => {
+      const qi = +el.dataset.qi;
+      if (el.dataset.tf !== undefined) {
+        // True/False — answer is the boolean correctness value
+        streamAnswerTF(qi, el.dataset.tf === 'true', streamQuizData[qi].answer);
+      } else {
+        streamAnswerQ(qi, +el.dataset.oi, streamQuizData[qi].answer);
+      }
+    });
+  });
+  c.querySelectorAll('[data-reveal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qi = +btn.dataset.reveal;
+      const box = document.getElementById('stream-answer-' + qi);
+      if (box) box.style.display = 'block';
+      btn.style.display = 'none';
+    });
+  });
+}
+
+/* ── Stream Flashcard Rendering ── */
+function renderStreamFlashcardsInteractive(fcs) {
+  streamFcsData = fcs || [];
+  const c = document.getElementById('stream-cards-container');
+  if (!streamFcsData.length) {
+    c.innerHTML = '<div class="stream-empty"><span class="se-ico">🃏</span>No flashcards generated.</div>';
+    return;
+  }
+  c.innerHTML = '<div class="flashcards-grid">' + streamFcsData.map((fc, i) => `
+    <div class="flashcard" data-fc="${i}">
+      <div class="fc-hint">tap to flip</div>
+      <div class="term">${htmlesc(fc.term)}</div>
+      <div class="def">${htmlesc(fc.definition)}</div>
+    </div>`).join('') + '</div>';
+  c.querySelectorAll('.flashcard').forEach(el => {
+    el.addEventListener('click', () => el.classList.toggle('flipped'));
+  });
+  showStreamTabDot('cards');
+}
+
+/* ── Stream Interactive Answer Handlers (own state) ── */
+function streamAnswerQ(qi, oi, correct) {
+  if (streamQuizAnswers[qi] !== undefined) return;
+  const opt = (streamQuizData[qi].options || [])[oi];
+  streamQuizAnswers[qi] = oi;
+  streamQuizCorrect[qi] = (opt === correct);
+  (streamQuizData[qi].options || []).forEach((o, j) => {
+    const el = document.querySelector(`#stream-quiz-container .option[data-qi="${qi}"][data-oi="${j}"]`);
+    if (!el) return;
+    if (o === correct) el.classList.add('reveal');
+    if (j === oi && o !== correct) el.classList.add('wrong');
+    if (j === oi && o === correct) el.classList.add('correct');
+  });
+  updateStreamScore();
+}
+
+function streamAnswerTF(qi, chosen, correct) {
+  if (streamQuizAnswers[qi] !== undefined) return;
+  streamQuizAnswers[qi] = chosen;
+  streamQuizCorrect[qi] = (chosen === correct);
+  const base = `#stream-quiz-container .option[data-qi="${qi}"]`;
+  const tEl = document.querySelector(base + '[data-tf="true"]');
+  const fEl = document.querySelector(base + '[data-tf="false"]');
+  if (chosen === correct) {
+    (chosen ? tEl : fEl).classList.add('correct');
+  } else {
+    (chosen ? tEl : fEl).classList.add('wrong');
+    (correct ? tEl : fEl).classList.add('reveal');
+  }
+  updateStreamScore();
+}
+
+function updateStreamScore() {
+  const scorable = streamQuizData.filter(q => { const t = q.type || 'mcq'; return t === 'mcq' || t === 'tf'; });
+  const total = scorable.length;
+  const answered = Object.keys(streamQuizCorrect).length;
+  const sc = document.getElementById('stream-quiz-score');
+  if (total > 0 && answered === total) {
+    const score = Object.values(streamQuizCorrect).filter(Boolean).length;
+    sc.style.display = 'block';
+    sc.textContent = `Score: ${score}/${total} — ${score===total?'🎉 Perfect!':score>=total/2?'👍 Good job!':'📚 Keep studying!'}`;
+  }
+}
+
+/* ── Stream tabs + helpers ── */
+function switchStreamTab(name, btn) {
+  document.querySelectorAll('.stream-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.stream-panel').forEach(p => p.classList.remove('active'));
+  (btn || document.querySelector('.stream-tab')).classList.add('active');
+  document.getElementById('stream-panel-' + name).classList.add('active');
+  const dot = document.getElementById('dot-' + name);
+  if (dot) dot.classList.remove('show');
+}
+
+function showStreamTabDot(tab) {
+  const dot = document.getElementById('dot-' + tab);
+  if (dot) dot.classList.add('show');
+}
+
+function streamLiveScrolled() {
+  const live = document.getElementById('stream-panel-live');
+  if (live && live.classList.contains('active')) {
+    const body = document.querySelector('.stream-tab-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }
+}
 
 /* ── Provider UI ── */
 async function loadProvider() {
@@ -450,7 +1000,7 @@ async function onLanguageChange() {
   await applyLocalization(lang);
 }
 
-/* ── Study pipeline ── */
+/* ── Study Pipeline ── */
 function setAgent(id, state) { document.getElementById(id).className = 'pipe-agent ' + state; }
 function resetAgents() { ['ag-explain','ag-quiz','ag-flash'].forEach(id => setAgent(id, '')); }
 
@@ -462,6 +1012,11 @@ async function runStudy() {
   resetAgents();
   document.getElementById('results').style.display = 'none';
   document.getElementById('study-btn').disabled = true;
+
+  // Open monitor for live view (without backdrop so pipeline stays visible)
+  if (!document.getElementById('monitor-drawer').classList.contains('open')) {
+    openDrawer('monitor', false);
+  }
 
   const loading = document.getElementById('loading');
   loading.classList.add('show');
@@ -527,7 +1082,7 @@ function renderResults(data) {
 
   document.getElementById('results').style.display = 'block';
   switchTab('explain', document.querySelector('.tab'));
-  loadMonitor();
+  stopMonitorLive();
 }
 
 /* ── Quiz ── */
@@ -568,6 +1123,7 @@ function renderQuiz() {
 }
 
 function esc(s) { return (s==null?'':String(s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' '); }
+function htmlesc(s) { return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function answerQ(qi, chosen, correct) {
   if (quizAnswers[qi] !== undefined) return;
@@ -629,40 +1185,177 @@ function renderFlashcards() {
 function flipCard(i) { document.getElementById(`fc-${i}`).classList.toggle('flipped'); }
 function revealAll() { flashcardData.forEach((_,i) => document.getElementById(`fc-${i}`).classList.add('flipped')); }
 
-/* ── Monitor ── */
-async function loadMonitor() {
+/* ── Monitor Live ── */
+let auditES = null;
+let monRunning = {};        // agent name -> start epoch (ms), for live elapsed timers
+
+function startMonitorLive() {
+  if (monitorInterval) clearInterval(monitorInterval);
+  startAuditStream();        // live audit log + running agents over SSE
+  updateMonitorMetrics();    // initial metrics/cache snapshot
+  monitorInterval = setInterval(() => { updateMonitorMetrics(); tickRunningAgents(); }, 1000);
+}
+
+function stopMonitorLive() {
+  if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+  stopAuditStream();
+}
+
+/* ── Live Audit Stream (Server-Sent Events) ── */
+function startAuditStream() {
+  if (auditES) return;
+  const logEl = document.getElementById('audit-log-live');
+  if (logEl) logEl.innerHTML = '<div class="audit-placeholder">Waiting for live events…</div>';
+  renderRunningAgents([]);
+  auditES = new EventSource('/api/audit/stream');
+  auditES.onopen  = () => setMonitorConn('live');
+  auditES.onerror = () => setMonitorConn('reconnecting');
+  auditES.addEventListener('audit', (ev) => {
+    try { appendAuditRowLive(JSON.parse(ev.data)); } catch (_) {}
+  });
+  auditES.addEventListener('agents', (ev) => {
+    try { renderRunningAgents(JSON.parse(ev.data).running || []); } catch (_) {}
+  });
+}
+
+function stopAuditStream() {
+  if (auditES) { auditES.close(); auditES = null; }
+}
+
+function setMonitorConn(state) {
+  const el = document.getElementById('monitor-conn');
+  const txt = document.getElementById('monitor-conn-text');
+  if (!el || !txt) return;
+  el.setAttribute('data-state', state);
+  txt.textContent = state === 'live' ? 'live' : state === 'connecting' ? 'connecting…' : 'reconnecting…';
+}
+
+/* ── Live audit log: human-readable representation ── */
+const AUDIT_META = {
+  task_created:        { ic: '📝', cls: 'ev-task',   verb: 'session created' },
+  agent_called:        { ic: '🚀', cls: 'ev-call',   verb: 'started' },
+  agent_responded:     { ic: '✅', cls: 'ev-resp',   verb: 'responded' },
+  workflow_completed:  { ic: '🏁', cls: 'ev-done',   verb: 'completed' },
+  task_state_changed:  { ic: '🔄', cls: 'ev-state',  verb: 'state changed' },
+  auth_failure:        { ic: '🔒', cls: 'ev-err',    verb: 'auth failed' },
+  rate_limit_exceeded: { ic: '⏳', cls: 'ev-warn',   verb: 'rate limited' },
+  custom:              { ic: '⭐', cls: 'ev-custom', verb: 'event' },
+};
+
+function describeAudit(e) {
+  const meta = AUDIT_META[e.event] || { ic: '•', cls: 'ev-custom', verb: e.event };
+  const data = e.event_data || {};
+  const agent = e.agent || (e.agent_url ? e.agent_url : 'System');
+  let title = '', sub = '';
+
+  if (e.event === 'agent_called') {
+    title = agent + ' started';
+  } else if (e.event === 'agent_responded') {
+    title = agent + ' responded';
+    if (data.duration_sec != null) sub = 'in ' + Number(data.duration_sec).toFixed(2) + 's';
+    if (data.succeeded === false) { title += ' · failed'; meta.cls = 'ev-err'; meta.ic = '❌'; }
+  } else if (e.event === 'workflow_completed') {
+    title = 'Pipeline completed';
+    if (data.total_sec != null) sub = data.total_sec.toFixed(2) + 's · ' + (data.steps || 0) + ' steps';
+    if (data.succeeded === false) { title += ' · failed'; meta.cls = 'ev-err'; meta.ic = '❌'; }
+  } else if (e.event === 'task_created') {
+    title = 'Study session started';
+  } else if (e.event === 'auth_failure') {
+    title = 'Auth failure' + (agent !== 'System' ? ' · ' + agent : '');
+  } else if (e.event === 'rate_limit_exceeded') {
+    title = 'Rate limit hit' + (agent !== 'System' ? ' · ' + agent : '');
+  } else {
+    title = agent + ' ' + meta.verb;
+  }
+  if (e.task_id) sub = (sub ? sub + ' · ' : '') + '#' + String(e.task_id).slice(0, 8);
+  return { ...meta, title, sub };
+}
+
+function appendAuditRowLive(e) {
+  const logEl = document.getElementById('audit-log-live');
+  if (!logEl) return;
+  const ph = logEl.querySelector('.audit-placeholder');
+  if (ph) ph.remove();
+  const d = describeAudit(e);
+  const ts = new Date((e.ts || 0) * 1000).toLocaleTimeString([], { hour12: false });
+  const row = document.createElement('div');
+  row.className = 'mon-audit-row ' + d.cls;
+  row.innerHTML = `
+    <span class="mon-audit-ic">${d.ic}</span>
+    <div class="mon-audit-main">
+      <div class="mon-audit-title">${d.title}</div>
+      ${d.sub ? `<div class="mon-audit-sub">${d.sub}</div>` : ''}
+    </div>
+    <span class="mon-audit-time">${ts}</span>`;
+  logEl.prepend(row);
+  while (logEl.children.length > 80) logEl.removeChild(logEl.lastChild);
+}
+
+/* ── Live "running now" panel with elapsed timers ── */
+const AGENT_ICONS = { ExplainerAgent: '🔍', QuizMakerAgent: '❓', FlashcardAgent: '🃏' };
+
+function renderRunningAgents(list) {
+  const el = document.getElementById('monitor-agents');
+  if (!el) return;
+  const now = Date.now();
+  const present = new Set(list || []);
+  (list || []).forEach(n => { if (!monRunning[n]) monRunning[n] = now; });
+  Object.keys(monRunning).forEach(n => { if (!present.has(n)) delete monRunning[n]; });
+
+  if (!list || !list.length) {
+    el.innerHTML = '<div class="mon-idle">No active agents — idle</div>';
+    return;
+  }
+  el.innerHTML = list.map(n => {
+    const t = ((now - (monRunning[n] || now)) / 1000).toFixed(1);
+    return `<div class="mon-agent-chip live">
+      <span class="mon-agent-ic">${AGENT_ICONS[n] || '🤖'}</span>
+      <div class="mon-agent-name">${n}</div>
+      <div class="mon-agent-status"><span class="mon-agent-pulse"></span>running · <span class="mon-agent-elapsed" data-name="${n}">${t}s</span></div>
+    </div>`;
+  }).join('');
+}
+
+function tickRunningAgents() {
+  if (!Object.keys(monRunning).length) return;
+  const now = Date.now();
+  Object.keys(monRunning).forEach(n => {
+    const s = document.querySelector('.mon-agent-elapsed[data-name="' + n + '"]');
+    if (s) s.textContent = ((now - monRunning[n]) / 1000).toFixed(1) + 's';
+  });
+}
+
+/* ── Metrics + Cache (polled; audit log is streamed live) ── */
+function monStat(icon, val, lbl) {
+  return `<div class="mon-stat"><span class="mon-stat-ic">${icon}</span>
+    <div class="mon-stat-body"><div class="mon-stat-val">${val}</div><div class="mon-stat-lbl">${lbl}</div></div></div>`;
+}
+
+async function updateMonitorMetrics() {
   try {
-    const [mRes, aRes, dRes] = await Promise.all([
+    const [mRes, dRes] = await Promise.all([
       fetch('/api/metrics'),
-      fetch('/api/audit'),
       fetch('/api/metrics/dashboard'),
     ]);
-    const m = await mRes.json(), a = await aRes.json(), d = await dRes.json();
-    const pLabel = m.provider === 'gemini' ? 'Gemini 2.0 Flash' : 'Claude Haiku';
-    document.getElementById('metrics-grid').innerHTML = `
-      <div class="metric"><div class="val">${m.tasks_created}</div><div class="lbl">tasks created</div></div>
-      <div class="metric"><div class="val">${m.tasks_completed}</div><div class="lbl">completed</div></div>
-      <div class="metric"><div class="val">${m.tasks_failed}</div><div class="lbl">failed</div></div>
-      <div class="metric"><div class="val">${m.agents_healthy}</div><div class="lbl">agents healthy</div></div>
-    `;
-    const c = d.cache || {}, r = d.retry || {}, fs = d.flashcard_stats || {};
-    document.getElementById('dashboard-grid').innerHTML = `
-      <div class="metric"><div class="val">${c.enabled ? 'on' : 'off'}</div><div class="lbl">cache</div></div>
-      <div class="metric"><div class="val">${c.hits||0}</div><div class="lbl">cache hits</div></div>
-      <div class="metric"><div class="val">${(c.hit_rate*100).toFixed(0)}%</div><div class="lbl">cache hit‑rate</div></div>
-      <div class="metric"><div class="val">${r.attempts||0}</div><div class="lbl">retry attempts</div></div>
-      <div class="metric"><div class="val">${r.failures||0}</div><div class="lbl">retry failures</div></div>
-      <div class="metric"><div class="val">${r.circuit_trips||0}</div><div class="lbl">circuit trips</div></div>
-      <div class="metric"><div class="val">${fs.total||0}</div><div class="lbl">flashcards</div></div>
-      <div class="metric"><div class="val">${fs.due_today||0}</div><div class="lbl">due now</div></div>
-    `;
-    document.getElementById('audit-log').innerHTML = [...a].reverse().map(e => `
-      <div class="audit-row">
-        <span class="evt-badge">${e.event}</span>
-        <span class="audit-url">${e.agent_url||e.task_id||'—'}</span>
-        <span style="color:var(--muted);font-size:11px;white-space:nowrap">${new Date(e.ts*1000).toLocaleTimeString()}</span>
-      </div>`).join('') || '<div style="font-size:13px;color:var(--muted)">No entries yet.</div>';
-  } catch(e) {}
+    const m = await mRes.json();
+    const d = await dRes.json();
+
+    document.getElementById('metrics-grid-live').innerHTML = [
+      monStat('📥', m.tasks_created, 'created'),
+      monStat('✅', m.tasks_completed, 'completed'),
+      monStat('⚠️', m.tasks_failed, 'failed'),
+      monStat('💚', m.agents_healthy, 'healthy'),
+    ].join('');
+
+    const c = d.cache || {};
+    const hitRate = ((c.hit_rate || 0) * 100).toFixed(0);
+    document.getElementById('cache-grid-live').innerHTML = [
+      monStat('⚡', c.enabled ? 'on' : 'off', 'cache'),
+      monStat('🎯', c.hits || 0, 'hits'),
+      monStat('🌫️', c.misses || 0, 'misses'),
+      monStat('📊', hitRate + '%', 'hit-rate'),
+    ].join('');
+  } catch (e) {}
 }
 
 /* ── Streaming study ── */
@@ -670,10 +1363,20 @@ async function runStream() {
   const topic = (document.getElementById('stream-topic').value || document.getElementById('topic-input').value).trim();
   if (!topic) { showError('Enter a topic to stream.'); return; }
   clearError();
-  document.getElementById('stream-explanation').textContent = '';
-  document.getElementById('stream-quiz').innerHTML = '';
-  document.getElementById('stream-flashcards').innerHTML = '';
   document.getElementById('stream-btn').disabled = true;
+
+  // Open stream drawer
+  openDrawer('stream');
+
+  // Reset stream UI (its own state, independent from the main quiz)
+  document.getElementById('stream-messages').innerHTML = '';
+  document.getElementById('stream-quiz-container').innerHTML = '<div class="stream-empty"><span class="se-ico">❓</span>Quiz appears here once QuizMakerAgent finishes.</div>';
+  document.getElementById('stream-cards-container').innerHTML = '<div class="stream-empty"><span class="se-ico">🃏</span>Flashcards appear here once FlashcardAgent finishes.</div>';
+  document.getElementById('stream-quiz-score').style.display = 'none';
+  ['quiz', 'cards'].forEach(t => { const d = document.getElementById('dot-' + t); if (d) d.classList.remove('show'); });
+  streamQuizData = []; streamQuizAnswers = {}; streamQuizCorrect = {}; streamFcsData = [];
+  streamCurrentMsg = null;
+  switchStreamTab('live', document.querySelector('.stream-tab'));
 
   try {
     const res = await fetch('/api/study/stream', {
@@ -695,6 +1398,9 @@ async function runStream() {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = '';
+    let explanationMsgId = null;
+    let explanationChunking = '';
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -704,7 +1410,33 @@ async function runStream() {
         const raw = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
         const ev = parseSSE(raw);
-        if (ev) handleStreamEvent(ev);
+        if (ev) {
+          if (ev.event === 'explanation') {
+            // Streaming explanation
+            if (!explanationMsgId) {
+              updateStreamAgent('explain', 'active');
+              const msgs = document.getElementById('stream-messages');
+              if (msgs.querySelector('.stream-empty')) msgs.innerHTML = '';
+              explanationMsgId = renderStreamMessage('explain', 'reasoning', ev.data, true);
+            } else {
+              explanationChunking += ev.data;
+              updateStreamMessageContent(explanationMsgId, explanationChunking, true);
+            }
+          } else if (ev.event === 'quiz') {
+            updateStreamAgent('explain', 'done');
+            updateStreamAgent('quiz', 'active');
+            const quiz = ev.data || [];
+            renderStreamInteractiveQuiz(quiz);
+            updateStreamAgent('quiz', 'done');
+          } else if (ev.event === 'flashcards') {
+            updateStreamAgent('flash', 'active');
+            const fcs = ev.data || [];
+            renderStreamFlashcardsInteractive(fcs);
+            updateStreamAgent('flash', 'done');
+          } else if (ev.event === 'error') {
+            showError(ev.data.detail || 'Stream error');
+          }
+        }
       }
     }
   } catch(e) {
@@ -725,71 +1457,12 @@ function parseSSE(raw) {
   catch (e) { return { event, data }; }
 }
 
-function handleStreamEvent(ev) {
-  if (ev.event === 'explanation') {
-    document.getElementById('stream-explanation').textContent += ev.data;
-  } else if (ev.event === 'quiz') {
-    renderStreamQuiz(ev.data || []);
-  } else if (ev.event === 'flashcards') {
-    renderStreamFlashcards(ev.data || []);
-  } else if (ev.event === 'error') {
-    showError(ev.data.detail || 'Stream error');
-  }
-}
-
-/* Render streamed quiz results with the same rich UI as the Quiz tab. */
-function renderStreamQuiz(quiz) {
-  const c = document.getElementById('stream-quiz');
-  if (!quiz.length) { c.innerHTML = '<div class="empty">No quiz data available.</div>'; return; }
-  c.innerHTML = '<h3 style="font-size:13px;font-weight:600;margin:8px 0 6px;color:var(--muted)">Quiz</h3>' + quiz.map((q, qi) => {
-    const t = q.type || 'mcq';
-    let body = '';
-    if (t === 'mcq') {
-      body = '<div class="options">' + (q.options||[]).map(opt => {
-        const correct = (opt === q.answer);
-        return `<div class="option ${correct ? 'reveal' : ''}">${esc(opt)}</div>`;
-      }).join('') + '</div>';
-    } else if (t === 'tf') {
-      const ans = !!q.answer;
-      body = `<div class="options">
-        <div class="option ${ans ? 'reveal' : ''}">True</div>
-        <div class="option ${!ans ? 'reveal' : ''}">False</div>
-      </div>`;
-    } else { // fi / sa — reveal answer on demand, with justification
-      body = `<button class="reveal-btn" onclick="this.nextElementSibling.style.display='block';this.style.display='none'">Show answer</button>
-        <div class="answer-box" style="display:none">
-          <div class="answer-text"><strong>Answer:</strong> ${esc(q.answer)}</div>
-          ${q.justification ? `<div class="justification"><strong>Why:</strong> ${esc(q.justification)}</div>` : ''}
-        </div>`;
-    }
-    return `<div class="quiz-q">
-      <div class="q-badge">${typeBadge(t)}</div>
-      <div class="q-text">${qi+1}. ${esc(q.q)}</div>
-      ${body}
-    </div>`;
-  }).join('');
-}
-
-/* Render streamed flashcards with the same flip‑card UI as the Flashcards tab. */
-function renderStreamFlashcards(fcs) {
-  const c = document.getElementById('stream-flashcards');
-  if (!fcs.length) { c.innerHTML = '<div class="empty">No flashcards available.</div>'; return; }
-  c.innerHTML = '<h3 style="font-size:13px;font-weight:600;margin:8px 0 6px;color:var(--muted)">Flashcards</h3>' +
-    '<div class="flashcards-grid">' + fcs.map((fc, i) => `
-      <div class="flashcard" id="sfc-${i}" onclick="document.getElementById('sfc-${i}').classList.toggle('flipped')">
-        <div class="fc-hint">tap to flip</div>
-        <div class="term">${esc(fc.term)}</div>
-        <div class="def">${esc(fc.definition)}</div>
-      </div>`).join('') + '</div>';
-}
-
 /* ── Tabs ── */
 function switchTab(name, btn) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   (btn || document.querySelector('.tab')).classList.add('active');
   document.getElementById('panel-' + name).classList.add('active');
-  if (name === 'monitor') loadMonitor();
 }
 
 function showError(msg) { const e = document.getElementById('error-box'); e.textContent = '⚠ '+msg; e.style.display='block'; }
@@ -797,6 +1470,40 @@ function clearError()   { document.getElementById('error-box').style.display='no
 
 document.getElementById('topic-input').addEventListener('keydown', e => { if (e.key==='Enter' && (e.ctrlKey||e.metaKey)) runStudy(); });
 
+// Click outside to close drawers
+document.getElementById('drawer-backdrop').addEventListener('click', () => closeAllDrawers());
+
+/* ── Stream drawer: stretchable resizer ── */
+let streamResizing = false;
+function initStreamResizer() {
+  const resizer = document.getElementById('stream-resizer');
+  const drawer = document.getElementById('stream-drawer');
+  if (!resizer || !drawer) return;
+  resizer.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    streamResizing = true;
+    drawer.classList.add('resizing');
+    document.body.style.userSelect = 'none';
+    resizer.setPointerCapture && resizer.setPointerCapture(e.pointerId);
+  });
+  resizer.addEventListener('pointermove', (e) => {
+    if (!streamResizing) return;
+    const minW = 360;
+    const maxW = Math.min(window.innerWidth * 0.92, 820);
+    const w = Math.max(minW, Math.min(maxW, window.innerWidth - e.clientX));
+    drawer.style.width = w + 'px';
+  });
+  const stop = () => {
+    if (!streamResizing) return;
+    streamResizing = false;
+    drawer.classList.remove('resizing');
+    document.body.style.userSelect = '';
+  };
+  resizer.addEventListener('pointerup', stop);
+  resizer.addEventListener('pointercancel', stop);
+}
+
+initStreamResizer();
 loadProvider();
 loadLanguage();
 </script>
