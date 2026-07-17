@@ -1484,16 +1484,17 @@ function attachQuizHandlers() {
 function esc(s) { return (s==null?'':String(s)).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,' '); }
 function htmlesc(s) { return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function answerQ(qi, chosen, correct) {
+function answerQ(qi, oi, correct) {
   if (quizAnswers[qi] !== undefined) return;
-  quizAnswers[qi] = chosen;
-  quizCorrect[qi] = (chosen === correct);
-  (quizData[qi].options||[]).forEach((opt, oi) => {
-    const el = document.querySelector(`#quiz-container .option[data-qi="${qi}"][data-oi="${oi}"]`);
+  const opt = (quizData[qi].options || [])[oi];
+  quizAnswers[qi] = oi;
+  quizCorrect[qi] = (opt === correct);
+  (quizData[qi].options || []).forEach((o, j) => {
+    const el = document.querySelector(`#quiz-container .option[data-qi="${qi}"][data-oi="${j}"]`);
     if (!el) return;
-    if (opt === correct)                     el.classList.add('reveal');
-    if (opt === chosen && chosen !== correct) el.classList.add('wrong');
-    if (opt === chosen && chosen === correct) el.classList.add('correct');
+    if (o === correct)                el.classList.add('reveal');
+    if (j === oi && o !== correct)    el.classList.add('wrong');
+    if (j === oi && o === correct)    el.classList.add('correct');
   });
   updateScore();
 }
