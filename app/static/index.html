@@ -227,6 +227,8 @@
     width: 3px; height: 56px; border-radius: 3px; background: var(--border); transition: background .15s;
   }
   .drawer-resizer:hover::before, .drawer.resizing .drawer-resizer::before { background: var(--accent); }
+  .drawer.resizing .drawer-resizer { opacity: 0.8; }
+  .drawer.resizing-active .drawer-resizer::before { opacity: 1; }
 
   .stream-drawer .drawer-body {
     flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 16px; overflow: hidden;
@@ -980,13 +982,27 @@ const loadingMessages = [
 function openDrawer(id, showBackdrop = true) {
   closeAllDrawers();
   if (showBackdrop) document.getElementById('drawer-backdrop').classList.add('show');
-  document.getElementById(id + '-drawer').classList.add('open');
+  const drawer = document.getElementById(id + '-drawer');
+  drawer.classList.add('open');
+  // Restore the user's last stretched width only now that it's actually open,
+  // so a closed panel can never show a phantom non-zero width on load.
+  const savedWidth = sessionStorage.getItem(id + '-drawer-width');
+  const minW = id === 'monitor' ? 320 : 360;
+  if (savedWidth && parseInt(savedWidth) >= minW) {
+    drawer.style.width = savedWidth + 'px';
+  }
   if (id === 'monitor') startMonitorLive();
 }
 function closeDrawer(id) {
   const backdrop = document.getElementById('drawer-backdrop');
   const drawer = document.getElementById(id + '-drawer');
   if (drawer) drawer.classList.remove('open');
+  // Clean up any inline width/style that was added during resizing
+  // (prevents the drawer from staying stuck after stretch)
+  if (drawer && drawer.style.width) {
+    drawer.style.width = '';
+    drawer.style.right = '';
+  }
   if (id === 'monitor' && monitorInterval) { stopMonitorLive(); }
   backdrop.classList.remove('show');
 }
@@ -1335,11 +1351,8 @@ async function runStudy() {
   document.getElementById('results').style.display = 'none';
   document.getElementById('study-btn').disabled = true;
 
-  // Open monitor for live view (without backdrop so content stays visible).
-  // Explicitly (re)start live polling — renderResults() may have stopped it on a
-  // previous run while leaving the docked panel open.
-  openDrawer('monitor', false);
-  startMonitorLive();
+  // Monitor stays closed by default — it only opens when the user clicks the
+  // Monitor button (openDrawer('monitor') starts live polling on demand).
 
   const loading = document.getElementById('loading');
   const skeleton = document.getElementById('skeleton');
@@ -1863,26 +1876,61 @@ function initStreamResizer() {
   const resizer = document.getElementById('stream-resizer');
   const drawer = document.getElementById('stream-drawer');
   if (!resizer || !drawer) return;
+
+  // Enable smooth transitions for width changes
+  drawer.style.transition = 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)';
+
   resizer.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     streamResizing = true;
     drawer.classList.add('resizing');
     document.body.style.userSelect = 'none';
+
+    // Prevent text selection and improve responsiveness
+    document.documentElement.style.setProperty('--resizer-active', '1');
     resizer.setPointerCapture && resizer.setPointerCapture(e.pointerId);
+
+    // Smooth activation animation
+    requestAnimationFrame(() => {
+      if (streamResizing) {
+        drawer.classList.add('resizing-active');
+      }
+    });
   });
+
   resizer.addEventListener('pointermove', (e) => {
     if (!streamResizing) return;
-    const minW = 360;
-    const maxW = Math.min(window.innerWidth * 0.92, 820);
-    const w = Math.max(minW, Math.min(maxW, window.innerWidth - e.clientX));
-    drawer.style.width = w + 'px';
+
+    // Use requestAnimationFrame for smoother animations
+    requestAnimationFrame(() => {
+      const viewportWidth = window.innerWidth;
+      const minW = 360; // Minimum drawer width
+      const maxW = Math.min(viewportWidth * 0.92, 820); // Maximum drawer width
+
+      // Calculate smooth interpolation between min and max based on mouse position
+      const mouseDistanceFromRight = viewportWidth - e.clientX;
+      const widthRatio = Math.max(0, Math.min(1, (mouseDistanceFromRight - 360) / (maxW - 360)));
+      const targetWidth = Math.round(minW + (maxW - minW) * widthRatio);
+
+      // Apply the smooth width change
+      drawer.style.width = targetWidth + 'px';
+    });
   });
+
   const stop = () => {
     if (!streamResizing) return;
+
+    // Smooth deactivation animation
     streamResizing = false;
-    drawer.classList.remove('resizing');
+    drawer.classList.remove('resizing', 'resizing-active');
     document.body.style.userSelect = '';
+    document.documentElement.style.removeProperty('--resizer-active');
+
+    // Store the final width for persistence
+    const finalWidth = drawer.offsetWidth;
+    sessionStorage.setItem('stream-drawer-width', finalWidth.toString());
   };
+
   resizer.addEventListener('pointerup', stop);
   resizer.addEventListener('pointercancel', stop);
 }
@@ -1893,26 +1941,61 @@ function initMonitorResizer() {
   const resizer = document.getElementById('monitor-resizer');
   const drawer = document.getElementById('monitor-drawer');
   if (!resizer || !drawer) return;
+
+  // Enable smooth transitions for width changes
+  drawer.style.transition = 'width 0.15s cubic-bezier(0.4, 0, 0.2, 1)';
+
   resizer.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     monitorResizing = true;
     drawer.classList.add('resizing');
     document.body.style.userSelect = 'none';
+
+    // Prevent text selection and improve responsiveness
+    document.documentElement.style.setProperty('--resizer-active', '1');
     resizer.setPointerCapture && resizer.setPointerCapture(e.pointerId);
+
+    // Smooth activation animation
+    requestAnimationFrame(() => {
+      if (monitorResizing) {
+        drawer.classList.add('resizing-active');
+      }
+    });
   });
+
   resizer.addEventListener('pointermove', (e) => {
     if (!monitorResizing) return;
-    const minW = 320;
-    const maxW = Math.min(window.innerWidth * 0.92, 800);
-    const w = Math.max(minW, Math.min(maxW, window.innerWidth - e.clientX));
-    drawer.style.width = w + 'px';
+
+    // Use requestAnimationFrame for smoother animations
+    requestAnimationFrame(() => {
+      const viewportWidth = window.innerWidth;
+      const minW = 320; // Minimum drawer width
+      const maxW = Math.min(viewportWidth * 0.92, 800); // Maximum drawer width
+
+      // Calculate smooth interpolation between min and max based on mouse position
+      const mouseDistanceFromRight = viewportWidth - e.clientX;
+      const widthRatio = Math.max(0, Math.min(1, (mouseDistanceFromRight - 320) / (maxW - 320)));
+      const targetWidth = Math.round(minW + (maxW - minW) * widthRatio);
+
+      // Apply the smooth width change
+      drawer.style.width = targetWidth + 'px';
+    });
   });
+
   const stop = () => {
     if (!monitorResizing) return;
+
+    // Smooth deactivation animation
     monitorResizing = false;
-    drawer.classList.remove('resizing');
+    drawer.classList.remove('resizing', 'resizing-active');
     document.body.style.userSelect = '';
+    document.documentElement.style.removeProperty('--resizer-active');
+
+    // Store the final width for persistence
+    const finalWidth = drawer.offsetWidth;
+    sessionStorage.setItem('monitor-drawer-width', finalWidth.toString());
   };
+
   resizer.addEventListener('pointerup', stop);
   resizer.addEventListener('pointercancel', stop);
 }
