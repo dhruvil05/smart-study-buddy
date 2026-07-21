@@ -54,7 +54,7 @@
     --accent-ring:   rgba(37,99,235,.35);
 
     /* Semantic (muted, single-hue each) */
-    --success:       #0f9d58; --success-weak: #e9f7ef;
+    --success:       #0f9d58; --success-weak: #e3f1e1;
     --warning:       #b26a00; --warning-weak: #fdf3e3;
     --danger:        #d1373b; --danger-weak:  #fdecec;
 
@@ -585,6 +585,7 @@
     *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
   /* Apply persisted theme before first paint to avoid a flash */
   (function () {
@@ -1035,6 +1036,8 @@ function renderStreamMessage(agent, role, content, isStreaming = false) {
   msgCard.className = 'stream-msg';
   const icons = { explain: 'search', quiz: 'quiz', flashcards: 'cards' };
   const names = { explain: 'ExplainerAgent', quiz: 'QuizMakerAgent', flashcards: 'FlashcardAgent' };
+  // During streaming: display raw text with preserved newlines; parse markdown when complete
+  const displayContent = isStreaming ? escapeHtml(content).replace(/\n/g, '<br>') : (agent === 'explain' ? marked.parse(content) : content);
   msgCard.innerHTML = `
     <div class="stream-msg-header">
       <span class="stream-msg-icon"><svg class="ico ico--sm"><use href="#i-${icons[agent] || 'spark'}"/></svg></span>
@@ -1042,7 +1045,7 @@ function renderStreamMessage(agent, role, content, isStreaming = false) {
       <span class="stream-msg-role">${role}</span>
       <span class="stream-msg-time">${new Date().toLocaleTimeString()}</span>
     </div>
-    <div class="stream-msg-body" id="${msgId}-body">${content}${isStreaming ? '<span class="stream-caret"></span>' : ''}</div>
+    <div class="stream-msg-body" id="${msgId}-body">${displayContent}${isStreaming ? '<span class="stream-caret"></span>' : ''}</div>
   `;
   container.appendChild(msgCard);
   streamLiveScrolled();
@@ -1052,9 +1055,21 @@ function renderStreamMessage(agent, role, content, isStreaming = false) {
 function updateStreamMessageContent(msgId, newContent, isStreaming = false) {
   const body = document.getElementById(msgId + '-body');
   if (body) {
-    body.innerHTML = newContent + (isStreaming ? '<span class="stream-caret"></span>' : '');
+    const isExplainer = msgId.startsWith('explain-');
+    // During streaming: display raw text with preserved newlines; parse markdown when complete
+    const displayContent = isStreaming
+      ? escapeHtml(newContent).replace(/\n/g, '<br>')
+      : (isExplainer ? marked.parse(newContent) : newContent);
+    body.innerHTML = displayContent + (isStreaming ? '<span class="stream-caret"></span>' : '');
     streamLiveScrolled();
   }
+}
+
+// Helper to escape HTML for safe display of raw text during streaming
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 /* ── Stream Quiz Rendering (Interactive, decoupled from main quiz) ──
@@ -1423,7 +1438,7 @@ function renderResults(data) {
     <div class="meta-chip"><span class="dot dot-amber"></span>${m.orchestration}</div>
     <div class="meta-chip" style="font-family:monospace;font-size:11px">task: ${data.task_id.slice(0,8)}…</div>
   `;
-  document.getElementById('explanation-text').textContent = data.explanation;
+  document.getElementById('explanation-text').innerHTML = marked.parse(data.explanation);
 
   quizData = data.quiz || [];
   quizAnswers = {};
@@ -1799,6 +1814,11 @@ async function runStream() {
             }
           } else if (ev.event === 'quiz') {
             updateStreamAgent('explain', 'done');
+            // Re-render explanation as proper markdown now that streaming is complete
+            const body = document.getElementById(explanationMsgId + '-body');
+            if (body) {
+              body.innerHTML = marked.parse(explanationChunking);
+            }
             updateStreamAgent('quiz', 'active');
             const quiz = ev.data || [];
             renderStreamInteractiveQuiz(quiz);
@@ -2007,6 +2027,15 @@ syncThemeIcon();
 syncQuizSegment();
 loadProvider();
 loadLanguage();
+
+// Render markdown to HTML using marked library
+document.addEventListener('DOMContentLoaded', () => {
+	const explanationElement = document.getElementById('explanation-text');
+	if (explanationElement && explanationElement.textContent) {
+		const markdown = explanationElement.textContent;
+		explanationElement.innerHTML = marked.parse(markdown);
+	}
+});
 </script>
 </body>
 </html>
