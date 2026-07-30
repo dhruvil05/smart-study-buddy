@@ -142,7 +142,121 @@
   .toolbar-btn:hover { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
   .toolbar-btn.active { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
 
-  /* ── Settings popover (consolidated provider + language + theme) ── */
+  /* ── Navbar (text-based navigation) ── */
+  .navbar {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-4);
+  }
+  .navbar-links {
+    display: flex;
+    gap: var(--sp-4);
+    align-items: center;
+  }
+  .navbar-link {
+    color: var(--text-2);
+    font-size: var(--fs-body);
+    font-weight: var(--fw-body);
+    padding: 8px 12px;
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    white-space: nowrap;
+  }
+  .navbar-link:hover {
+    background: var(--accent-weak);
+    color: var(--accent);
+  }
+  .navbar-link.active {
+    background: var(--accent-weak);
+    color: var(--accent);
+  }
+  .navbar-link[data-active="true"] {
+    background: var(--accent-weak);
+    color: var(--accent);
+  }
+  .navbar-link[data-primary] {
+    font-weight: var(--fw-medium);
+  }
+
+  /* Mobile menu toggle (hamburger) ── */
+  .navbar-toggle {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r-md);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .navbar-toggle .bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: currentColor;
+    border-radius: 2px;
+    transition: transform .2s, opacity .2s;
+  }
+
+  /* Mobile menu dropdown ── */
+  .mobile-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: var(--sp-5);
+    right: var(--sp-5);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-2);
+    padding: var(--sp-4);
+    display: none;
+    flex-direction: column;
+    gap: var(--sp-3);
+    z-index: 200;
+    animation: pop-in .16s ease;
+  }
+  .mobile-menu.open {
+    display: flex;
+    animation: pop-in .16s ease;
+  }
+  .mobile-menu .nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 10px 12px;
+    font-size: var(--fs-body);
+    cursor: pointer;
+    border-radius: var(--r-sm);
+    transition: background .15s;
+  }
+  .mobile-menu .nav-item:hover {
+    background: var(--accent-weak);
+  }
+  .mobile-menu .nav-item .ico { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* Theme toggle within mobile menu */
+  .mobile-menu-theme {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 10px 12px;
+    font-size: var(--fs-body);
+    cursor: pointer;
+    border-radius: var(--r-sm);
+    transition: background .15s;
+  }
+  .mobile-menu-theme:hover {
+    background: var(--accent-weak);
+  }
+  .mobile-menu-theme .ico { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* Settings popover (consolidated provider + language + theme) ── */
   .settings-popover {
     position: absolute; top: calc(100% + 8px); right: var(--sp-5); z-index: 200;
     width: 320px; max-width: calc(100vw - 32px);
@@ -723,13 +837,18 @@
     <span class="logo-mark"><svg class="ico"><use href="#i-brain"/></svg></span>
     Smart Study Buddy
   </div>
+  <nav class="navbar">
+    <div class="navbar-links">
+      <a class="navbar-link" href="#" onclick="openDrawer('stream'); return false;">Stream</a>
+      <a class="navbar-link" href="#" onclick="openDrawer('monitor', false); return false;">Monitor</a>
+    </div>
+    <button class="navbar-toggle" id="navbar-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+      <span class="bar"></span>
+      <span class="bar"></span>
+      <span class="bar"></span>
+    </button>
+  </nav>
   <div class="toolbar-right">
-    <button class="toolbar-btn" id="btn-stream" onclick="openDrawer('stream')" title="Stream" aria-label="Open stream">
-      <svg class="ico"><use href="#i-stream"/></svg>
-    </button>
-    <button class="toolbar-btn" id="btn-monitor" onclick="openDrawer('monitor', false)" title="Monitor" aria-label="Open monitor">
-      <svg class="ico"><use href="#i-monitor"/></svg>
-    </button>
     <button class="toolbar-btn" id="btn-theme" onclick="toggleTheme()" title="Toggle light / dark theme" aria-label="Toggle theme" aria-pressed="false">
       <svg class="ico"><use href="#i-sun"/></svg>
     </button>
@@ -767,6 +886,14 @@
     </div>
   </div>
 </header>
+
+<!-- Mobile nav menu -->
+<div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+  <a class="mobile-link" href="#" onclick="openDrawer('stream'); closeMobileMenu(); return false;">Stream</a>
+  <a class="mobile-link" href="#" onclick="openDrawer('monitor', false); closeMobileMenu(); return false;">Monitor</a>
+  <button class="mobile-link" onclick="toggleTheme(); closeMobileMenu();" aria-label="Toggle theme">Toggle Theme</button>
+  <button class="mobile-link" onclick="toggleSettings(event); closeMobileMenu();" aria-label="Open settings">Settings</button>
+</div>
 
 <!-- App shell: content + docked monitor -->
 <div class="app-shell">
@@ -2035,6 +2162,58 @@ document.addEventListener('DOMContentLoaded', () => {
 		const markdown = explanationElement.textContent;
 		explanationElement.innerHTML = marked.parse(markdown);
 	}
+});
+
+/* Mobile Menu Toggle Function */
+function toggleMobileMenu() {
+  const mobileMenu = document.getElementById('mobile-menu');
+  const isOpen = mobileMenu.classList.contains('open');
+
+  // Close any currently open menus
+  document.querySelectorAll('.mobile-menu').forEach(m => {
+    if (m !== mobileMenu) m.classList.remove('open');
+  });
+
+  // Toggle the menu visibility
+  if (!isOpen) {
+    mobileMenu.classList.add('open');
+    document.body.classList.add('menu-open');
+  } else {
+    mobileMenu.classList.remove('open');
+    document.body.classList.remove('menu-open');
+  }
+}
+
+// Close menu when clicking outside
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.navbar-toggle') || e.target.closest('.mobile-menu')) return;
+
+  document.querySelectorAll('.mobile-menu').forEach(m => {
+    m.classList.remove('open');
+    document.body.classList.remove('menu-open');
+  });
+});
+
+// Close mobile menu when clicking a link
+document.querySelectorAll('.navbar-link, .mobile-link').forEach(link => {
+  link.addEventListener('click', () => {
+    const mobileMenu = document.getElementById('mobile-menu');
+    if (mobileMenu && mobileMenu.classList.contains('open')) {
+      mobileMenu.classList.remove('open');
+      document.body.classList.remove('menu-open');
+    }
+  });
+});
+
+// Close settings popover when clicking outside
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('settings-popover');
+  const btn = document.getElementById('btn-settings');
+  if (pop && pop.classList.contains('open') && !pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+    pop.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.classList.remove('active');
+  }
 });
 </script>
 </body>
