@@ -1,0 +1,2392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>auto-factory</title>
+<style>
+:root{
+  --bg:#F6F6F3; --card:#FFFFFF; --line:#E2E2DE; --line2:#EEEEEA; --line3:#F2F2EF;
+  --ink:#1B1B1F; --ink2:#3A3A42; --ink3:#2A2A30; --mute:#5E5E66; --field:#D4D4CF;
+  --accent:#2448B8; --accent-d:#1C3A96; --accent-dd:#16307F; --accent-bg:#E6ECFB; --accent-ink:#1F3F9E;
+  --sand:#FFF8EA; --sand-line:#F2D9A6; --sand-ink:#5C3A00; --sand-ink2:#3A2A08; --warn-ink:#7A4D00;
+  --red:#A3231A; --red-line:#E9B4AE; --red-bg:#FDF1EF; --column:#EFEFEB; --hover:#F4F4F1;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.45}
+a{color:var(--accent)} a:hover{color:var(--accent-dd)}
+h1,h2,h3{margin:0}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#view:focus{outline:none}
+[hidden]{display:none !important}
+.visually-hidden{position:absolute !important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.mute{color:var(--mute)}
+.small{font-size:12px}
+.grow{flex:1 1 0}
+.stack{display:flex;flex-direction:column}
+.row{display:flex;align-items:center}
+.wrapflex{flex-wrap:wrap}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:3px 8px;border-radius:999px;line-height:16px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.chip.big{font-size:13px;padding:6px 10px}
+.chip.sm{font-size:11px;padding:2px 6px}
+.pass{background:#E3F2E9;color:#17643D}
+.fail{background:#FCE8E6;color:var(--red)}
+.pend{background:#EEEEF0;color:#4A4A55}
+.warn{background:#FFF1D6;color:var(--warn-ink)}
+.info{background:var(--accent-bg);color:var(--accent-ink)}
+
+/* buttons, fields */
+.tab{font-size:14px;font-weight:500;color:#4A4A55;text-decoration:none;padding:8px 12px;border-radius:8px;display:inline-flex;align-items:center;gap:6px}
+.tab:hover{background:#F0F0EC;color:var(--ink)}
+.tab[aria-current="page"]{background:var(--accent-bg);color:var(--accent-ink)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:999px;background:#C98A00}
+.btn{font:inherit;font-size:14px;font-weight:600;padding:9px 14px;border-radius:8px;border:1px solid var(--field);background:#fff;color:var(--ink);cursor:pointer;min-height:40px;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-align:center}
+.btn:hover{background:var(--hover);color:var(--ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:disabled:hover{background:#fff}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent-d);color:#fff}
+.btn-primary:disabled:hover{background:var(--accent)}
+.btn-danger{color:var(--red);border-color:var(--red-line)}
+.btn-danger:hover{background:var(--red-bg);color:var(--red)}
+.btn-danger.solid{background:var(--red);border-color:var(--red);color:#fff}
+.btn-danger.solid:hover{background:#861C15;color:#fff}
+.icon-btn{font:inherit;width:36px;height:36px;border-radius:8px;border:1px solid var(--field);background:#fff;color:var(--ink2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.icon-btn:hover{background:var(--hover)}
+.icon-btn:disabled{opacity:.4;cursor:not-allowed}
+.linkbtn{font:inherit;background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;cursor:pointer;text-align:left;word-break:break-all}
+.linkbtn:hover{color:var(--accent-dd)}
+.field{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--field);border-radius:8px;background:#fff;color:var(--ink);min-height:36px;max-width:100%}
+.field.mono{font-size:12px}
+.field[readonly]{background:#F7F7F4;color:var(--mute)}
+.field[aria-invalid="true"]{border-color:var(--red);box-shadow:0 0 0 1px var(--red)}
+textarea.field{resize:vertical;font-size:14px;padding:10px;width:100%}
+input[type="checkbox"]{width:18px;height:18px;accent-color:var(--accent);margin:0;flex:0 0 auto}
+.lbl{font-size:13px;font-weight:600}
+.help{font-size:12px;color:var(--mute)}
+.inline{display:inline-flex;gap:8px;align-items:center;font-size:14px}
+.unit{display:inline-flex;align-items:center;gap:6px}
+.money{display:flex;align-items:center;gap:6px}
+
+/* layout */
+.hdr{background:#fff;border-bottom:1px solid var(--line)}
+.hdr-inner{max-width:1360px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+.proj{display:flex;align-items:center;gap:8px;font-size:14px;min-width:0}
+.proj strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}
+.tabs{display:flex;gap:4px}
+.netbar{background:#FCE8E6;color:var(--red);border-top:1px solid #F3C7C2;font-size:13px}
+.netbar>div{max-width:1360px;margin:0 auto;padding:8px 24px}
+.fixturebar{background:var(--accent-bg);color:var(--accent-ink);font-size:13px}
+.fixturebar>div{max-width:1360px;margin:0 auto;padding:8px 24px}
+.wrap{max-width:1360px;margin:0 auto;padding:24px}
+.page{display:flex;flex-direction:column;gap:28px}
+.sec{display:flex;flex-direction:column;gap:12px}
+.sec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.sec-h h2{font-size:18px}
+.sec-h p{margin:0;font-size:13px;color:var(--mute)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card h2{font-size:16px}
+.card-sub{margin:4px 0 0;font-size:13px;color:var(--mute)}
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:var(--sand);border:1px solid var(--sand-line);border-radius:10px;padding:12px 16px;font-size:14px;color:var(--sand-ink2)}
+.banner>span{flex:1 1 300px}
+.empty{font-size:13px;color:var(--mute);padding:16px 8px;text-align:center;border:1px dashed #CFCFC9;border-radius:10px}
+.tblbox{overflow-x:auto;border:1px solid var(--line2);border-radius:8px;background:#fff;-webkit-overflow-scrolling:touch}
+.tblbox.outer{border-color:var(--line);border-radius:10px}
+table.tbl{border-collapse:collapse;width:100%}
+.tbl th{font-size:12px;font-weight:600;color:var(--mute);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{font-size:14px;padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl.wide th,.tbl.wide td{padding-left:16px;padding-right:16px}
+.tbl td.nowrap{white-space:nowrap}
+.tbl tr.off td{background:#FAFAF8}
+.tbl tr.off .field{color:var(--mute)}
+
+/* KPIs */
+.kpis{display:flex;flex-wrap:wrap;gap:16px}
+.kpi{flex:1 1 200px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px}
+.kpi-l{font-size:13px;color:var(--mute)}
+.kpi-v{font-size:28px;font-weight:700;margin-top:4px;line-height:1.2}
+.kpi-n{font-size:12px;color:var(--warn-ink);margin-top:2px}
+.kpi.sand{background:var(--sand);border-color:var(--sand-line)}
+.kpi.sand .kpi-l{color:var(--warn-ink)}
+.kpi.sand .kpi-v{color:var(--sand-ink)}
+
+/* job cards */
+.cards{display:flex;flex-wrap:wrap;gap:16px}
+.jobcard{display:flex;flex-direction:column;gap:10px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;text-decoration:none;color:var(--ink);min-width:0}
+.jobcard:hover{border-color:#9DB0E8;color:var(--ink)}
+.jobcard.wait{flex:1 1 360px;padding:16px}
+.jc-title{font-size:16px;font-weight:600;overflow-wrap:anywhere}
+.jc-title.sm{font-size:14px;line-height:19px}
+.jc-ask{font-size:14px;color:var(--ink2);line-height:20px}
+.jc-meta{font-size:13px;color:var(--mute)}
+.jc-meta.sm{font-size:12px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.rrow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding-top:8px;border-top:1px solid var(--line2)}
+.rrow-l{font-size:11px;font-weight:700;color:var(--mute);margin-right:2px}
+.pipeline{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.column{flex:1 1 200px;min-width:0;background:var(--column);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
+.column-h{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 0}
+.column-h h3{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2)}
+.column-h span{font-size:12px;font-weight:600;color:var(--mute)}
+
+/* job detail */
+.crumbs{font-size:13px;color:var(--mute)}
+.jd-top{display:flex;flex-direction:column;gap:10px;min-width:0}
+.jd-top h1{font-size:26px;line-height:32px;overflow-wrap:anywhere}
+.jd-line{font-size:14px;color:var(--ink2)}
+.cols{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.col-main{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.col-side{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.col-main>h2{font-size:16px}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.step{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.step-h{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.step-n{width:26px;height:26px;border-radius:999px;background:var(--column);font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;color:var(--ink2);flex:0 0 auto}
+.step-t{font-size:15px;font-weight:600}
+.step-m{font-size:12px;color:var(--mute)}
+.bul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:20px;color:var(--ink3);overflow-wrap:anywhere}
+.subrev{border-top:1px solid var(--line2);padding-top:10px;display:flex;flex-direction:column;gap:6px}
+.subrev-h{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:14px}
+.files{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px}
+.chk .tbl td,.chk .tbl th{font-size:13px;padding:8px 12px}
+.pre{white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.5;margin:0;background:#F7F7F4;border:1px solid var(--line2);border-radius:8px;padding:10px 12px;max-height:360px;overflow:auto}
+.prewrap{white-space:pre-wrap;overflow-wrap:anywhere}
+details>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink2)}
+details[open]>summary{margin-bottom:8px}
+.decide{background:var(--sand);border:1px solid var(--sand-line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.decide h2{font-size:16px;color:var(--sand-ink)}
+.decide p{margin:0;font-size:14px;line-height:21px;color:var(--sand-ink2)}
+.lookat{background:#fff;border:1px solid var(--sand-line);border-radius:8px;padding:10px 12px;font-size:13px;line-height:19px}
+.lookat-h{font-weight:600;margin-bottom:4px}
+.fb{display:flex;flex-direction:column;gap:6px;padding-top:10px;border-top:1px solid var(--sand-line)}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.msg{font-size:13px}
+.msg.err{color:var(--red)}
+.msg.ok{color:#17643D}
+#jd-runner:empty{display:none}
+.runstop{border-color:#F3C7C2;background:#FFFBFA;gap:10px}
+.note-info{background:var(--accent-bg);border:1px solid #C9D5F5;border-radius:10px;padding:12px 16px;font-size:14px;line-height:21px;color:var(--accent-ink);display:flex;flex-direction:column;gap:4px}
+.note-info p{margin:0}
+.note-info code{font-size:.92em;background:#fff;border-radius:6px;padding:1px 6px}
+.facts{margin:0}
+.facts dt{font-size:12px;color:var(--mute)}
+.facts dd{margin:2px 0 12px;font-size:13px;overflow-wrap:anywhere}
+.facts dd:last-child{margin-bottom:0}
+.costrow{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.costrow.total{font-size:14px;font-weight:700;padding-top:8px;border-top:1px solid var(--line2)}
+
+/* settings */
+.settings{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.snav-wrap{flex:1 1 220px;max-width:260px;display:flex;flex-direction:column;gap:2px;position:sticky;top:12px}
+.snav-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mute);padding:0 12px 8px}
+.snav{display:block;font-size:14px;color:var(--ink2);text-decoration:none;padding:9px 12px;border-radius:8px}
+.snav:hover{background:var(--column);color:var(--ink)}
+.snav[aria-current="page"]{background:var(--accent-bg);color:var(--accent-ink);font-weight:600}
+.settings-main{flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.intro{display:flex;flex-direction:column;gap:6px}
+.intro h1{font-size:24px}
+.intro p{margin:0;font-size:14px;line-height:21px;color:var(--ink2);max-width:760px}
+.two{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.two>.card{flex:1 1 320px}
+.fields{display:flex;flex-wrap:wrap;gap:16px}
+.fld{flex:1 1 200px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.fld.full{flex-basis:100%}
+.fld .field{width:100%}
+.emptystate{background:#fff;border:1px dashed #BDBDB6;border-radius:12px;padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.emptystate h2{font-size:18px}
+.emptystate p{margin:0;font-size:14px;line-height:21px;color:var(--ink2);max-width:520px}
+.always{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:14px}
+.always li{display:flex;gap:10px;align-items:flex-start}
+.note-sand{margin:0;font-size:13px;line-height:19px;color:var(--warn-ink);background:var(--sand);border-radius:8px;padding:10px 12px}
+.warn-text{font-size:12px;color:var(--red);line-height:17px}
+.rev{display:flex;align-items:center;gap:8px;font-size:13px;margin:2px 0}
+.rev>span{min-width:64px}
+.pp{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.pp li{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pp .field{flex:1 1 240px}
+.savebar{position:sticky;bottom:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:14px 16px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 -6px 18px rgba(27,27,31,.06)}
+.savebar-note{flex:1 1 300px;font-size:13px;color:var(--mute);display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.errors{background:#FCE8E6;border:1px solid #F3C7C2;border-radius:10px;padding:12px 16px;color:var(--red);font-size:14px}
+.errors ul{margin:6px 0 0;padding-left:20px}
+.switch-row{display:flex;gap:12px;align-items:flex-start}
+.switch-row input{width:20px;height:20px;margin-top:2px}
+.switch-row label{font-size:14px;line-height:21px}
+.ph{display:flex;flex-wrap:wrap;gap:6px}
+.ph code{font-size:12px;background:#F2F2EF;border-radius:6px;padding:2px 6px}
+
+/* auth */
+.auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.auth-card{max-width:560px;width:100%;align-items:flex-start}
+.auth-card h1{font-size:20px;line-height:28px}
+.auth-card code{font-size:.92em;background:#F2F2EF;border-radius:6px;padding:1px 6px}
+.auth-card p{margin:0;font-size:14px;line-height:21px;color:var(--ink2)}
+
+/* modal + toast */
+dialog#modal{border:1px solid var(--line);border-radius:12px;padding:0;width:min(960px,calc(100vw - 32px));max-height:calc(100vh - 48px);color:var(--ink);background:#fff;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+dialog#modal::backdrop{background:rgba(27,27,31,.4)}
+dialog#modal.fallback{position:fixed;inset:24px 0 auto 0;margin:0 auto;z-index:50;display:block}
+.modal-inner{display:flex;flex-direction:column;max-height:calc(100vh - 48px)}
+.modal-head{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.modal-head h2{font-size:15px;flex:1 1 auto;overflow-wrap:anywhere}
+#modal-body{margin:0;padding:16px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.55;flex:1 1 auto;max-height:none;border:0;border-radius:0;background:#fff}
+#modal-body .d-add{color:#17643D;background:#EEF8F1;display:inline-block;width:100%}
+#modal-body .d-del{color:var(--red);background:#FDF1EF;display:inline-block;width:100%}
+#modal-body .d-hunk{color:var(--accent-ink)}
+.toast{position:fixed;right:16px;bottom:16px;z-index:60;max-width:min(420px,calc(100vw - 32px))}
+.toast>div{background:#1B1B1F;color:#fff;border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+
+@media (max-width:760px){
+  .wrap{padding:16px}
+  .hdr-inner{padding:12px 16px}
+  .netbar>div,.fixturebar>div{padding:8px 16px}
+  .snav-wrap{max-width:none;flex-basis:100%;position:static}
+  .jobcard.wait{flex-basis:100%}
+  .jd-top h1{font-size:22px;line-height:28px}
+  .kpi{flex-basis:140px}
+  .kpi-v{font-size:24px}
+  .savebar .btn{flex:1 1 auto}
+}
+@media (prefers-reduced-motion:no-preference){.btn,.tab,.snav,.jobcard{transition:background-color .12s,border-color .12s}}
+</style>
+</head>
+<body>
+<div id="root"><div class="wrap"><p class="mute">Loading the dashboard…</p></div></div>
+<dialog id="modal" aria-labelledby="modal-title">
+  <div class="modal-inner">
+    <div class="modal-head">
+      <h2 id="modal-title" class="mono">File</h2>
+      <button type="button" class="icon-btn" data-action="close-modal" aria-label="Close">✕</button>
+    </div>
+    <pre id="modal-body" class="mono" tabindex="0"></pre>
+  </div>
+</dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<noscript><div class="wrap"><p>The auto-factory dashboard needs JavaScript.</p></div></noscript>
+<script>
+(function () {
+'use strict';
+
+/* ------------------------------------------------------------------ constants */
+
+var RUNNING = ['intake', 'spec', 'implement', 'gate', 'review', 'approve', 'merging'];
+var WAITING = ['needs-human', 'needs-info'];
+var TERMINAL = ['merged', 'rejected'];
+var COLUMNS = [
+  { name: 'Intake', stages: ['intake'] },
+  { name: 'Spec', stages: ['spec'] },
+  { name: 'Implement', stages: ['implement'] },
+  { name: 'Gate', stages: ['gate'] },
+  { name: 'Review', stages: ['review'] },
+  { name: 'Approve', stages: ['approve', 'merging'] }
+];
+var SECTIONS = [
+  { key: 'checks', name: 'Check steps' },
+  { key: 'environment', name: 'Job environment' },
+  { key: 'routing', name: 'Reviewers and routing' },
+  { key: 'runner', name: 'Agent tools' },
+  { key: 'limits', name: 'Limits and budgets' },
+  { key: 'protected', name: 'Protected paths' },
+  { key: 'run', name: 'Run control' },
+  { key: 'history', name: 'Settings history' }
+];
+var MODELS = ['fable', 'opus', 'sonnet', 'haiku'];
+var RISKS = ['low', 'medium', 'high'];
+var RISK_CLS = { low: 'pend', medium: 'warn', high: 'fail' };
+var SURFACES = ['ui', 'security', 'data', 'access', 'integration'];
+var SURFACE_DESC = {
+  ui: 'Staff will see the change on a screen',
+  security: 'Auth, user input reaching queries, secrets',
+  data: 'Schema, migrations, reports and totals',
+  access: 'Roles, permissions, tenant scoping, audit log',
+  integration: 'Email, SMS, webhooks, payment providers'
+};
+var RECOMMENDED_HUMAN = ['data', 'access', 'integration'];
+var REVIEWER_LABEL = { code: 'Code', security: 'Security', ux: 'UX', ui: 'UI', data: 'Data', access: 'Access' };
+var AGENT_LABEL = { intake: 'Intake', 'spec-writer': 'Spec writer', implementer: 'Implementer', approver: 'Approver' };
+var MAIN_AGENTS = [
+  { key: 'intake', label: 'Intake', help: 'Runs once per issue. Fable may bill to usage credits.' },
+  { key: 'spec-writer', label: 'Spec writer', help: '' },
+  { key: 'implementer', label: 'Implementer', help: '' },
+  { key: 'approver', label: 'Approver', help: '' }
+];
+var LOCKED_PATHS = ['factory/*', '.claude/*'];
+var TOKEN_KEY = 'auto-factory-token';
+var POLL_MS = 5000;
+var PREFLIGHT_MS = 2000;
+
+/* ------------------------------------------------------------------ app state */
+
+var app = {
+  token: null,
+  fixture: null,
+  fixtureData: null,
+  authFailed: false,
+  state: null,
+  stateErr: null,
+  route: { name: 'board' },
+  lastSection: 'checks',
+  draft: null,
+  baseJson: null,
+  saving: false,
+  saveErrors: [],
+  job: null,
+  jobErr: null,
+  decisionKey: null,
+  fileCache: {},
+  fileInflight: {},
+  preflight: null,
+  preflightTimer: null,
+  preflightMsg: null,
+  history: null,
+  historyErr: null,
+  pollBusy: false,
+  jobBusy: false,
+  pauseBusy: false,
+  focusTest: false
+};
+
+/* ------------------------------------------------------------------ helpers */
+
+function esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function arr(v) { return Array.isArray(v) ? v : []; }
+function obj(v) { return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; }
+function num(v) { return typeof v === 'number' && isFinite(v) ? v : null; }
+function str(v) { return v === null || v === undefined ? '' : String(v); }
+function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+function uniq(a) { var out = []; a.forEach(function (x) { if (out.indexOf(x) < 0) out.push(x); }); return out; }
+function cap(s) { s = str(s); return s.charAt(0).toUpperCase() + s.slice(1); }
+function idSafe(s) { return str(s).replace(/[^A-Za-z0-9_-]/g, '_'); }
+function safeUrl(u) { return typeof u === 'string' && /^https?:\/\/[^\s]+$/i.test(u) ? u : null; }
+function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+
+var CHIP_CLS = { pass: 1, fail: 1, pend: 1, warn: 1, info: 1 };
+function chip(text, cls, extra) {
+  cls = CHIP_CLS[cls] ? cls : 'pend';
+  return '<span class="chip ' + cls + (extra ? ' ' + extra : '') + '" title="' + esc(text) + '">' + esc(text) + '</span>';
+}
+
+function fmtUsd(v) { v = num(v); return v === null ? '—' : '$' + v.toFixed(2); }
+function toMs(iso) { if (!iso) return NaN; var t = Date.parse(iso); return isNaN(t) ? NaN : t; }
+function fmtDur(ms) {
+  if (!isFinite(ms) || ms < 0) return '—';
+  var s = Math.round(ms / 1000);
+  if (s < 60) return s + 's';
+  var m = Math.floor(s / 60);
+  if (m < 60) return m + 'm';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '');
+  var d = Math.floor(h / 24);
+  return d + 'd' + (h % 24 ? ' ' + (h % 24) + 'h' : '');
+}
+function fmtSecs(v) {
+  v = num(v);
+  if (v === null) return '—';
+  var s = Math.round(v);
+  if (s < 60) return s + 's';
+  var m = Math.floor(s / 60), r = s % 60;
+  if (m < 60) return m + 'm' + (r ? ' ' + r + 's' : '');
+  return fmtDur(s * 1000);
+}
+function fmtWhen(iso) {
+  var t = toMs(iso);
+  if (!isFinite(t)) return iso ? str(iso) : '—';
+  var d = new Date(t), now = new Date();
+  var time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return 'today at ' + time;
+  return d.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' + time;
+}
+function fmtSize(b) {
+  b = num(b);
+  if (b === null) return '';
+  if (b < 1024) return b + ' B';
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1024 / 1024).toFixed(1) + ' MB';
+}
+function getPath(o, path) {
+  return path.split('.').reduce(function (c, k) { return c === null || c === undefined ? undefined : c[k]; }, o);
+}
+function setPath(o, path, v) {
+  var ks = path.split('.'), cur = o;
+  for (var i = 0; i < ks.length - 1; i++) {
+    var k = ks[i];
+    if (cur[k] === null || typeof cur[k] !== 'object') cur[k] = /^\d+$/.test(ks[i + 1]) ? [] : {};
+    cur = cur[k];
+  }
+  cur[ks[ks.length - 1]] = v;
+}
+
+function delPath(o, path) {
+  var ks = path.split('.'), parent = getPath(o, ks.slice(0, -1).join('.'));
+  if (ks.length === 1) parent = o;
+  if (parent && typeof parent === 'object') delete parent[ks[ks.length - 1]];
+}
+
+function storeGet(k) { try { return window.sessionStorage.getItem(k); } catch (e) { return null; } }
+function storeSet(k, v) { try { window.sessionStorage.setItem(k, v); } catch (e) { /* storage blocked */ } }
+function storeDel(k) { try { window.sessionStorage.removeItem(k); } catch (e) { /* storage blocked */ } }
+
+function $(id) { return document.getElementById(id); }
+
+var toastTimer = null;
+function toast(text) {
+  var t = $('toast');
+  if (!t) return;
+  t.innerHTML = '<div>' + esc(text) + '</div>';
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.innerHTML = ''; }, 4500);
+}
+
+function errText(r, fallback) {
+  if (!r) return fallback || 'Something went wrong.';
+  if (r.status === 0) return 'Can\'t reach serve.py. Is it still running?';
+  var d = obj(r.data);
+  if (d.error) return str(d.error);
+  if (arr(d.errors).length) return arr(d.errors).map(str).join(' ');
+  return (fallback || 'Request failed') + ' (HTTP ' + r.status + ').';
+}
+
+/* ------------------------------------------------------------------ auth + api */
+
+function readTokenFromHash() {
+  var h = window.location.hash || '';
+  var m = h.match(/(?:^#|[&#?])token=([^&]*)/);
+  if (!m) return false;
+  var tok = '';
+  try { tok = decodeURIComponent(m[1]); } catch (e) { tok = m[1]; }
+  if (tok) { app.token = tok; storeSet(TOKEN_KEY, tok); app.authFailed = false; }
+  var rest = h.replace(/(^#|[&?])token=[^&]*/, '$1').replace(/^#[&?]/, '#');
+  if (!/^#\//.test(rest)) rest = '#/board';
+  try { window.history.replaceState(null, '', window.location.pathname + window.location.search + rest); } catch (e) { /* ignore */ }
+  return true;
+}
+
+function initAuth() {
+  var q = null;
+  try { q = new URLSearchParams(window.location.search).get('fixture'); } catch (e) { q = null; }
+  if (q && /^[\w.\/-]+\.json$/.test(q) && q.indexOf('//') < 0) { app.fixture = q; return; }
+  if (!readTokenFromHash()) app.token = storeGet(TOKEN_KEY);
+}
+
+function onAuthFail() {
+  app.authFailed = true;
+  app.token = null;
+  storeDel(TOKEN_KEY);
+  stopPreflightPoll();
+  renderAll();
+}
+
+function api(method, path, body) {
+  if (app.fixture) return fixtureApi(method, path);
+  var opts = { method: method, headers: { 'X-Factory-Token': app.token || '' }, cache: 'no-store', credentials: 'same-origin' };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  return fetch(path, opts).then(function (res) {
+    return res.text().then(function (txt) {
+      var data = null;
+      try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+      if (res.status === 401 || res.status === 403) onAuthFail();
+      return { ok: res.ok, status: res.status, data: data };
+    });
+  }, function () {
+    return { ok: false, status: 0, data: null };
+  });
+}
+
+/* Dev only: ?fixture=<relative .json> serves a saved /api/state payload, read-only. */
+function fixtureApi(method, path) {
+  function ok(d) { return { ok: true, status: 200, data: d }; }
+  function nf() { return { ok: false, status: 404, data: { error: 'not found in fixture' } }; }
+  var load = app.fixtureData ? Promise.resolve(app.fixtureData) :
+    fetch(app.fixture, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) { app.fixtureData = d; return d; });
+  return load.then(function (d) {
+    var dev = obj(d._dev);
+    if (method !== 'GET') return { ok: false, status: 400, data: { error: 'Fixture mode is read-only.', errors: ['Fixture mode is read-only: nothing was sent or saved.'] } };
+    var u = new URL(path, window.location.href), p = u.pathname, m;
+    if (p === '/api/state') { var s = clone(d); delete s._dev; return ok(s); }
+    if (p === '/api/preflight') return ok({ status: 'idle', result: d.preflight || null });
+    if (p === '/api/config/history') return ok({ entries: arr(dev.history) });
+    if (p === '/api/config/diff') return ok({ diff: str(dev.diff) });
+    m = p.match(/^\/api\/jobs\/([^\/]+)\/file$/);
+    if (m) {
+      var jid = decodeURIComponent(m[1]), fp = u.searchParams.get('path');
+      var c = obj(obj(dev.contents)[jid])[fp];
+      return ok({ path: fp, content: c !== undefined ? c : '(The fixture has no content for this file.)' });
+    }
+    m = p.match(/^\/api\/jobs\/([^\/]+)$/);
+    if (m) {
+      var id = decodeURIComponent(m[1]);
+      var job = arr(d.jobs).filter(function (j) { return j && (j.id === id || String(j.issue) === id); })[0];
+      if (!job) return nf();
+      return ok({ job: job, files: arr(obj(dev.files)[job.id]) });
+    }
+    return nf();
+  }, function () { return { ok: false, status: 0, data: null }; });
+}
+
+/* ------------------------------------------------------------------ job helpers */
+
+function jobsList() { return arr(app.state && app.state.jobs).filter(function (j) { return j && typeof j === 'object'; }); }
+function cfgSaved() { return obj(app.state && app.state.config); }
+function jobTitle(j) { return j.title ? str(j.title) : (j.issue !== undefined && j.issue !== null ? 'Issue #' + j.issue : str(j.id || 'Untitled job')); }
+function issueRef(j) { return j.issue !== undefined && j.issue !== null ? '#' + j.issue : str(j.id); }
+function jobHref(j) { return '#/jobs/' + encodeURIComponent(str(j.id || j.issue)); }
+function riskOf(j) { return str(obj(j.intake).risk).toLowerCase(); }
+function riskChip(j, extra) { var r = riskOf(j); return r ? chip('risk ' + r, RISK_CLS[r] || 'pend', extra) : ''; }
+function surfacesOf(j) { return arr(obj(j.intake).surfaces).filter(function (s) { return s && s !== 'none'; }).map(str); }
+function surfaceChips(j) { return surfacesOf(j).map(function (s) { return chip(s, 'info'); }).join(''); }
+function roundOf(j) { return num(j.round); }
+function jobCost(j) { return num(obj(j.cost).usd); }
+function verdictCls(v) {
+  v = str(v).toUpperCase().trim();
+  if (!v || v === 'PENDING' || v === '…') return 'pend';
+  if (/FLAKY/.test(v)) return 'warn';
+  if (/^(PASS|ACCEPT|READY|APPROVE|MERGED|OK)\b/.test(v)) return 'pass';
+  if (/^(FAIL|REJECT|BLOCKED|CHANGES|ERROR)/.test(v)) return 'fail';
+  if (/^(NEEDS-INFO|ESCALATE|WARN)/.test(v)) return 'warn';
+  if (/^(SKIP|OFF)/.test(v)) return 'pend';
+  return 'info';
+}
+function waitingKind(j) {
+  if (j.stage === 'needs-info') return { t: 'Asked the author', c: 'pend' };
+  if (j.held) return { t: 'Approved · needs your merge', c: 'warn' };
+  return { t: 'Escalated', c: 'fail' };
+}
+function rejectedAtIntake(j) {
+  if (str(obj(j.intake).decision).toUpperCase() === 'REJECT') return true;
+  return arr(j.history).some(function (h) { return h && h.to === 'rejected' && (h.from === 'intake' || h.from === 'needs-info'); });
+}
+function stageLabel(st) {
+  return {
+    intake: 'Intake', spec: 'Spec', implement: 'Implementing', gate: 'In the gate', review: 'In review',
+    approve: 'With the approver', merging: 'Merging', 'needs-info': 'Asked the author', 'needs-human': 'Needs you',
+    merged: 'Merged', rejected: 'Rejected'
+  }[st] || (st ? str(st) : 'Unknown stage');
+}
+function stageChip(j) {
+  if (WAITING.indexOf(j.stage) >= 0) { var k = waitingKind(j); return chip(k.t, k.c); }
+  if (j.stage === 'merged') return chip('Merged', 'pass');
+  if (j.stage === 'rejected') return chip(rejectedAtIntake(j) ? 'Rejected at intake' : 'Rejected', 'fail');
+  return chip(stageLabel(j.stage), 'info');
+}
+function reviewerNames(j) {
+  return uniq(Object.keys(obj(obj(j.agents).reviewers)).concat(Object.keys(obj(j.reviews))));
+}
+function reviewChips(j) {
+  var reviews = obj(j.reviews);
+  return reviewerNames(j).map(function (r) {
+    var v = str(reviews[r]).toUpperCase();
+    var c = v === 'PASS' ? 'pass' : v === 'CHANGES' ? 'fail' : 'pend';
+    return chip(r + ' ' + (v && v !== 'PENDING' ? v : '…'), c, 'sm');
+  }).join('');
+}
+function gateChip(g) { return g ? chip('gate ' + str(g).toUpperCase(), verdictCls(g), 'sm') : ''; }
+function roundRows(j) {
+  var rows = [], r = roundOf(j) || 1, st = j.stage;
+  var hasReviews = Object.keys(obj(j.reviews)).length > 0;
+  if (st === 'intake' || st === 'spec') return rows;
+  if (st === 'implement') {
+    if (r > 1 && (j.gate || hasReviews)) rows.push({ label: 'R' + (r - 1), chips: gateChip(j.gate) + (hasReviews ? reviewChips(j) : '') });
+    rows.push({ label: 'R' + r, chips: chip('implementing', 'info', 'sm') });
+  } else if (st === 'gate') {
+    rows.push({ label: 'R' + r, chips: chip('gate running', 'info', 'sm') });
+  } else if (st === 'review' || st === 'approve' || st === 'merging') {
+    var extra = st === 'approve' ? chip('approver …', 'pend', 'sm') : st === 'merging' ? chip('merging', 'info', 'sm') : '';
+    rows.push({ label: 'R' + r, chips: gateChip(j.gate) + reviewChips(j) + extra });
+  } else if (j.gate || hasReviews) {
+    rows.push({ label: 'R' + r, chips: gateChip(j.gate) + reviewChips(j) });
+  }
+  return rows.filter(function (x) { return x.chips; });
+}
+function elapsed(j) {
+  var s = toMs(j.started);
+  if (!isFinite(s)) return '—';
+  var e = j.ended ? toMs(j.ended) : Date.now();
+  return fmtDur(e - s);
+}
+function gateBlocked(cfg) {
+  cfg = obj(cfg);
+  if (!cfg.checks && cfg.checks_none_ok === undefined) return false;
+  var on = arr(cfg.checks).some(function (c) { return c && c.enabled !== false; });
+  return !on && cfg.checks_none_ok !== true;
+}
+function runStatus() {
+  var s = app.state;
+  if (!s) return null;
+  if (s.paused) return { t: 'Paused', c: 'warn' };
+  if (gateBlocked(s.config)) return { t: 'Gate blocked · no check steps', c: 'fail' };
+  var sl = obj(s.slots);
+  var used = num(sl.used) !== null ? sl.used : 0;
+  var total = num(sl.total) !== null ? sl.total : (num(cfgSaved().concurrency) !== null ? cfgSaved().concurrency : '?');
+  return { t: 'Running · ' + used + ' of ' + total + ' slots', c: 'pass' };
+}
+function projectName() {
+  var p = obj(app.state && app.state.project);
+  if (p.name) return str(p.name);
+  if (p.repo) return str(p.repo).replace(/[\\\/]+$/, '').split(/[\\\/]/).pop();
+  return '';
+}
+
+/* ------------------------------------------------------------------ settings draft */
+
+function isDirty() { return !!app.draft && JSON.stringify(app.draft) !== app.baseJson; }
+function ensureDraft() {
+  if (app.draft || !app.state || !app.state.config || typeof app.state.config !== 'object') return;
+  app.draft = clone(app.state.config);
+  app.baseJson = JSON.stringify(app.state.config);
+}
+function resetDraft() {
+  if (!app.state || !app.state.config) return;
+  app.draft = clone(app.state.config);
+  app.baseJson = JSON.stringify(app.state.config);
+}
+
+/* ------------------------------------------------------------------ shell */
+
+var LOGO = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2448B8" stroke-width="2" aria-hidden="true" focusable="false"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><path d="M14 17.5h7M17.5 14v7"></path></svg>';
+
+function headerHTML() {
+  return '<header class="hdr" id="hdr"><div class="hdr-inner">' +
+    '<div class="brand">' + LOGO + '<span>auto-factory</span></div>' +
+    '<div class="proj"><span class="mute small">Project</span> <strong id="h-proj"></strong></div>' +
+    '<nav aria-label="Main" class="tabs">' +
+      '<a class="tab" id="tab-board" href="#/board">Board</a>' +
+      '<a class="tab" id="tab-settings" href="#/settings/checks">Settings<span id="tab-dot"></span></a>' +
+    '</nav>' +
+    '<div class="grow"></div>' +
+    '<span id="h-status" role="status"></span>' +
+    '<a class="btn" id="hdr-test" href="#/settings/checks" data-action="goto-test">Test on main</a>' +
+    '<button type="button" class="btn" id="h-pause" data-action="toggle-pause">Pause factory</button>' +
+    '</div><div id="netbar"></div></header>' +
+    '<div id="view" tabindex="-1"></div>';
+}
+
+function authHTML() {
+  return '<main class="auth"><div class="card auth-card">' +
+    '<div class="brand">' + LOGO + '<span>auto-factory</span></div>' +
+    '<h1>Open the link printed by <code>python factory/bin/serve.py</code></h1>' +
+    '<p>This dashboard only answers requests that carry the access token from that link. In your repo, run the command above, then open the <span class="mono">http://127.0.0.1:&lt;port&gt;/#token=…</span> link it prints.</p>' +
+    (app.authFailed ? '<p class="warn-text" role="alert">The token was missing or not accepted. serve.py prints a new link each time it starts, so an old link stops working.</p>' : '') +
+    '</div></main>';
+}
+
+function renderAll() {
+  var root = $('root');
+  if (!root) return;
+  if (app.authFailed || (!app.token && !app.fixture)) {
+    root.innerHTML = authHTML();
+    document.title = 'auto-factory: open the serve.py link';
+    return;
+  }
+  if (!$('hdr')) root.innerHTML = headerHTML();
+  updateHeader();
+  renderView();
+}
+
+function updateHeader() {
+  if (!$('hdr')) return;
+  var pn = projectName();
+  $('h-proj').textContent = pn || '…';
+  $('h-proj').parentNode.hidden = !pn && !!app.state;
+  var onSettings = app.route.name === 'settings';
+  var tb = $('tab-board'), ts = $('tab-settings');
+  if (app.route.name === 'board' || app.route.name === 'job') tb.setAttribute('aria-current', 'page'); else tb.removeAttribute('aria-current');
+  if (onSettings) ts.setAttribute('aria-current', 'page'); else ts.removeAttribute('aria-current');
+  ts.setAttribute('href', '#/settings/' + app.lastSection);
+  setHTML($('tab-dot'), isDirty() ? ' <span class="dot" aria-hidden="true"></span><span class="visually-hidden">(unsaved changes)</span>' : '');
+  var st = runStatus();
+  setHTML($('h-status'), st ? chip('● ' + st.t, st.c, 'big') : '');
+  var pb = $('h-pause');
+  var paused = !!(app.state && app.state.paused);
+  pb.textContent = app.pauseBusy ? (paused ? 'Resuming…' : 'Pausing…') : (paused ? 'Resume factory' : 'Pause factory');
+  pb.disabled = !app.state || app.pauseBusy;
+  pb.setAttribute('aria-pressed', paused ? 'true' : 'false');
+  var nb = $('netbar');
+  var bars = '';
+  if (app.fixture) bars += '<div class="fixturebar"><div>Fixture mode: showing <span class="mono">' + esc(app.fixture) + '</span>. Read-only, nothing is sent.</div></div>';
+  if (app.stateErr) bars += '<div class="netbar" role="alert"><div>' + esc(app.stateErr) + ' Retrying every 5 seconds.</div></div>';
+  setHTML(nb, bars);
+}
+
+/* Only touch the DOM when the markup changed, so live regions don't re-announce. */
+function setHTML(el, html) {
+  if (!el || el._html === html) return;
+  el._html = html;
+  el.innerHTML = html;
+}
+
+function setTitle() {
+  var pn = projectName(), t = 'auto-factory';
+  if (app.route.name === 'board') t = (pn ? pn + ' · ' : '') + 'Board · auto-factory';
+  else if (app.route.name === 'settings') {
+    var s = SECTIONS.filter(function (x) { return x.key === app.route.section; })[0];
+    t = 'Settings: ' + (s ? s.name : '') + ' · auto-factory';
+  } else if (app.route.name === 'job') {
+    var j = app.job && app.job.job;
+    t = j ? issueRef(j) + ' ' + jobTitle(j) + ' · auto-factory' : 'Job · auto-factory';
+  }
+  document.title = t;
+}
+
+function renderView() {
+  var v = $('view');
+  if (!v) return;
+  var rt = app.route;
+  if (rt.name === 'board') {
+    withFocus(function () { v.innerHTML = boardHTML(); });
+  } else if (rt.name === 'settings') {
+    ensureDraft();
+    v.innerHTML = settingsHTML();
+    updateSavebar();
+    if (rt.section === 'checks') renderPreflight();
+  } else {
+    v.innerHTML = jobLayoutHTML();
+    app.decisionKey = null;
+    renderJobParts();
+  }
+  setTitle();
+}
+
+function withFocus(fn) {
+  var a = document.activeElement, id = a && a.id;
+  fn();
+  if (id && a !== document.activeElement) { var n = $(id); if (n && n !== document.activeElement) n.focus({ preventScroll: true }); }
+}
+
+/* ------------------------------------------------------------------ board */
+
+function boardHTML() {
+  var s = app.state;
+  if (!s) {
+    return '<main class="wrap"><p class="mute" role="status">' + (app.stateErr ? esc(app.stateErr) : 'Loading the board…') + '</p></main>';
+  }
+  var jobs = jobsList();
+  var running = jobs.filter(function (j) { return RUNNING.indexOf(j.stage) >= 0; });
+  var waiting = jobs.filter(function (j) { return WAITING.indexOf(j.stage) >= 0; });
+  var finished = jobs.filter(function (j) { return RUNNING.indexOf(j.stage) < 0 && WAITING.indexOf(j.stage) < 0; });
+  var merged = jobs.filter(function (j) { return j.stage === 'merged'; }).length;
+  var total = 0, partial = false, anyCost = false;
+  jobs.forEach(function (j) {
+    var c = jobCost(j);
+    if (c !== null) { total += c; anyCost = true; }
+    if (obj(j.cost).partial) partial = true;
+  });
+  var rank = function (j) { return j.stage === 'needs-human' ? (j.held ? 0 : 1) : 2; };
+  waiting.sort(function (a, b) { return rank(a) - rank(b) || (toMs(a.started) || 0) - (toMs(b.started) || 0); });
+  finished.sort(function (a, b) { return (toMs(b.ended || b.started) || 0) - (toMs(a.ended || a.started) || 0); });
+
+  var h = '<main class="wrap page"><h1 class="visually-hidden">Board</h1>';
+  if (s.config_dirty) h += configBannerHTML();
+  h += '<div class="kpis">' +
+    kpi('In progress', running.length, '') +
+    kpi('Waiting on you', waiting.length, 'sand') +
+    kpi('Merged', merged, '') +
+    '<div class="kpi"><div class="kpi-l">Spend (API-equivalent)</div><div class="kpi-v">' + (anyCost ? fmtUsd(total) : '$0.00') + '</div>' +
+    (partial ? '<div class="kpi-n">Partial: some models have no price in config.json</div>' : '') + '</div>' +
+    '</div>';
+
+  h += '<section aria-labelledby="h-waiting" class="sec"><div class="sec-h"><h2 id="h-waiting">Waiting on you</h2>' +
+    '<p>Merge a PR on GitHub to approve it, or open the job to send feedback or reject.</p></div>';
+  h += waiting.length ? '<div class="cards">' + waiting.map(waitingCard).join('') + '</div>' : '<div class="empty">Nothing is waiting on you.</div>';
+  h += '</section>';
+
+  h += '<section aria-labelledby="h-pipe" class="sec"><div class="sec-h"><h2 id="h-pipe">Pipeline</h2>' +
+    '<p>Jobs the factory is working on now. Click a card to read every file it wrote.</p></div><div class="pipeline">';
+  COLUMNS.forEach(function (col) {
+    var cj = running.filter(function (j) { return col.stages.indexOf(j.stage) >= 0; })
+      .sort(function (a, b) { return (toMs(a.started) || 0) - (toMs(b.started) || 0); });
+    var hid = 'col-' + col.name.toLowerCase();
+    h += '<section class="column" aria-labelledby="' + hid + '"><div class="column-h"><h3 id="' + hid + '">' + esc(col.name) + '</h3><span>' + cj.length + '<span class="visually-hidden"> jobs</span></span></div>' +
+      (cj.length ? cj.map(pipeCard).join('') : '<div class="empty">No jobs</div>') + '</section>';
+  });
+  h += '</div></section>';
+
+  h += '<section aria-labelledby="h-done" class="sec"><div class="sec-h"><h2 id="h-done">Finished</h2></div>';
+  if (!finished.length) h += '<div class="empty">No finished jobs yet.</div>';
+  else {
+    h += '<div class="tblbox outer"><table class="tbl wide" style="min-width:760px"><thead><tr><th scope="col">Issue</th><th scope="col">Result</th><th scope="col">Risk</th><th scope="col">Rounds</th><th scope="col">PR</th><th scope="col">Cost</th><th scope="col">Time</th></tr></thead><tbody>' +
+      finished.map(finishedRow).join('') + '</tbody></table></div>';
+  }
+  h += '</section></main>';
+  return h;
+}
+
+function kpi(label, value, cls) {
+  return '<div class="kpi ' + cls + '"><div class="kpi-l">' + esc(label) + '</div><div class="kpi-v">' + esc(value) + '</div></div>';
+}
+
+// Why auto-merge is off, as route.py recorded it; ': <reason>' or ''.
+function amReason(j) {
+  if (typeof j.auto_merge_reason === 'string' && j.auto_merge_reason) return ': ' + j.auto_merge_reason;
+  return j.always_human ? ': an area it touches always needs a human' : '';
+}
+
+function waitingAsk(j) {
+  if (j.stage === 'needs-info') return 'Intake asked the author questions on issue ' + issueRef(j) + '. The job continues when they reply.';
+  if (j.held) {
+    return 'All checks and reviews passed, but auto-merge is off for this job' + amReason(j) +
+      '. Check the pull request' + (j.pr ? ' #' + j.pr : '') + ' and merge it on GitHub.';
+  }
+  return 'The factory stopped and needs your call. Open the job to read why, then send feedback or reject it.';
+}
+
+function waitingCard(j) {
+  var k = waitingKind(j), r = roundOf(j);
+  var meta = [];
+  if (j.stage === 'needs-info') meta.push('Waiting for the author'); else if (r !== null) meta.push(plural(r, 'round'));
+  meta.push(fmtUsd(jobCost(j)));
+  meta.push(elapsed(j));
+  return '<a class="jobcard wait" id="card-w-' + idSafe(j.id) + '" href="' + esc(jobHref(j)) + '">' +
+    '<div class="row wrapflex" style="gap:8px">' + chip(k.t, k.c) + '<span class="mono small mute">' + esc(issueRef(j)) + (j.pr !== undefined && j.pr !== null ? ' · PR #' + esc(j.pr) : '') + '</span></div>' +
+    '<div class="jc-title">' + esc(jobTitle(j)) + '</div>' +
+    '<div class="jc-ask">' + esc(waitingAsk(j)) + '</div>' +
+    '<div class="tags">' + riskChip(j) + surfaceChips(j) + (j.stage === 'needs-info' ? chip('needs info', 'pend') : '') + '</div>' +
+    '<div class="jc-meta">' + esc(meta.join(' · ')) + '</div></a>';
+}
+
+function pipeMeta(j) {
+  var r = roundOf(j), lim = num(j.round_limit), parts = [];
+  var what = {
+    intake: 'Deciding scope and risk', spec: 'Writing spec.md',
+    implement: 'Round ' + (r || 1) + (lim ? ' of ' + lim : ''), gate: 'Running check steps',
+    review: 'Waiting for all reviewers', approve: 'Approver checking', merging: 'Merging'
+  }[j.stage];
+  if (what) parts.push(what);
+  if (j.pr !== undefined && j.pr !== null) parts.push('PR #' + j.pr);
+  if (jobCost(j) !== null) parts.push(fmtUsd(jobCost(j)));
+  return parts.join(' · ');
+}
+
+function pipeCard(j) {
+  var tags = riskChip(j) + surfaceChips(j);
+  if (j.stage === 'intake' && !riskOf(j)) tags = chip('intake running', 'info') + tags;
+  var rows = roundRows(j).map(function (r) {
+    return '<div class="rrow"><span class="rrow-l">' + esc(r.label) + '</span>' + r.chips + '</div>';
+  }).join('');
+  return '<a class="jobcard" id="card-p-' + idSafe(j.id) + '" href="' + esc(jobHref(j)) + '">' +
+    '<div class="row" style="justify-content:space-between;gap:8px"><span class="mono small mute">' + esc(issueRef(j)) + '</span><span class="small mute">' + esc(elapsed(j)) + '</span></div>' +
+    '<div class="jc-title sm">' + esc(jobTitle(j)) + '</div>' +
+    (tags ? '<div class="tags">' + tags + '</div>' : '') + rows +
+    '<div class="jc-meta sm">' + esc(pipeMeta(j)) + '</div></a>';
+}
+
+function finishedRow(j) {
+  var res, cls;
+  if (j.stage === 'merged') { res = 'Merged'; cls = 'pass'; }
+  else if (j.stage === 'rejected') { res = rejectedAtIntake(j) ? 'Rejected at intake' : 'Rejected'; cls = 'fail'; }
+  else { res = stageLabel(j.stage); cls = 'pend'; }
+  var pr = safeUrl(j.pr_url);
+  var prCell = j.pr !== undefined && j.pr !== null ? (pr ? '<a href="' + esc(pr) + '" target="_blank" rel="noopener noreferrer">#' + esc(j.pr) + '</a>' : '#' + esc(j.pr)) : '—';
+  var r = roundOf(j);
+  return '<tr><td style="white-space:normal;min-width:260px"><span class="mono small mute" style="margin-right:8px">' + esc(issueRef(j)) + '</span>' +
+    '<a href="' + esc(jobHref(j)) + '" id="row-' + idSafe(j.id) + '">' + esc(jobTitle(j)) + '</a></td>' +
+    '<td class="nowrap">' + chip(res, cls) + '</td>' +
+    '<td class="nowrap">' + esc(riskOf(j) || '—') + '</td>' +
+    '<td class="nowrap">' + (r !== null ? esc(r) : '—') + '</td>' +
+    '<td class="nowrap">' + prCell + '</td>' +
+    '<td class="nowrap mono">' + fmtUsd(jobCost(j)) + (obj(j.cost).partial ? ' <span class="small mute">partial</span>' : '') + '</td>' +
+    '<td class="nowrap">' + esc(elapsed(j)) + '</td></tr>';
+}
+
+function configBannerHTML() {
+  return '<div class="banner" role="status"><span>Settings saved but not committed. Commit <span class="mono small">factory/config.json</span> so everyone running the factory gets them.</span>' +
+    '<button type="button" class="btn" data-action="show-diff">Show diff</button></div>';
+}
+
+/* ------------------------------------------------------------------ job detail */
+
+function jobLayoutHTML() {
+  return '<main class="wrap stack" style="gap:20px">' +
+    '<nav class="crumbs" aria-label="Breadcrumb" id="jd-crumbs"><a href="#/board">Board</a></nav>' +
+    '<div id="jd-head"><p class="mute" role="status">Loading the job…</p></div>' +
+    '<div id="jd-runner" class="stack" style="gap:12px"></div>' +
+    '<div class="cols" id="jd-cols" hidden>' +
+      '<section aria-labelledby="h-steps" class="col-main"><h2 id="h-steps">What happened</h2><div id="jd-steps"></div></section>' +
+      '<aside class="col-side" aria-label="Job details"><div id="jd-decision"></div>' +
+        '<section aria-labelledby="h-facts" class="card" id="jd-facts"></section>' +
+        '<section aria-labelledby="h-cost" class="card" id="jd-cost"></section>' +
+      '</aside>' +
+    '</div></main>';
+}
+
+function loadJob(id, quiet) {
+  if (app.jobBusy && quiet) return Promise.resolve();
+  app.jobBusy = true;
+  return api('GET', '/api/jobs/' + encodeURIComponent(id)).then(function (r) {
+    app.jobBusy = false;
+    if (app.route.name !== 'job' || app.route.id !== id) return;
+    if (r.ok && r.data && r.data.job && typeof r.data.job === 'object') {
+      app.job = { job: r.data.job, files: arr(r.data.files), id: id };
+      app.jobErr = null;
+    } else if (r.status === 404) {
+      app.job = null;
+      app.jobErr = 'There is no job ' + id + '. It may have been archived.';
+    } else if (r.status === 401 || r.status === 403) {
+      return;
+    } else if (!quiet || !app.job) {
+      app.jobErr = errText(r, 'Could not load the job');
+    }
+    renderJobParts();
+    setTitle();
+  });
+}
+
+function renderJobParts() {
+  if (app.route.name !== 'job' || !$('jd-head')) return;
+  var data = app.job && app.job.id === app.route.id ? app.job : null;
+  if (!data) {
+    $('jd-head').innerHTML = app.jobErr ? '<div class="card"><h1 style="font-size:20px">Job not available</h1><p class="msg err" role="alert" style="margin:0">' + esc(app.jobErr) + '</p><div><a class="btn" href="#/board">Back to the board</a></div></div>'
+      : '<p class="mute" role="status">Loading the job…</p>';
+    $('jd-cols').hidden = true;
+    return;
+  }
+  var j = data.job;
+  var group = WAITING.indexOf(j.stage) >= 0 ? 'Waiting on you' : RUNNING.indexOf(j.stage) >= 0 ? 'Pipeline' : 'Finished';
+  var steps = buildSteps(j, data.files);
+  withFocus(function () {
+    setHTML($('jd-crumbs'), '<a href="#/board">Board</a> / ' + esc(group) + ' / <span aria-current="page">' + esc(issueRef(j)) + '</span>');
+    setHTML($('jd-head'), jobHeadHTML(j));
+    $('jd-cols').hidden = false;
+    /* setHTML skips unchanged markup, so open <details> and focus survive the 5 s refresh */
+    setHTML($('jd-steps'), stepsHTML(steps, data.files));
+    var key = [j.stage, !!j.held, str(j.pr_url), str(j.pr), str(j.round)].join('|');
+    if (key !== app.decisionKey) {
+      app.decisionKey = key;
+      $('jd-decision').innerHTML = decisionHTML(j);
+    }
+    setHTML($('jd-facts'), factsHTML(j));
+    setHTML($('jd-cost'), costHTML(j));
+  });
+  hydrateChecks(steps);
+  hydrateForHuman(j, data.files);
+  hydrateRunner(data.files);
+}
+
+/* runs/stopped.md and runs/warnings.md, written by factory/bin/run.py, shown above the steps */
+function hydrateRunner(files) {
+  var el = $('jd-runner');
+  if (!el) return;
+  var fs = arr(files).filter(function (f) { return f && typeof f.path === 'string'; });
+  function find(n) { return fs.filter(function (f) { return f.path.replace(/\\/g, '/').replace(/^\.\//, '') === n; })[0]; }
+  var st = find('runs/stopped.md'), wn = find('runs/warnings.md');
+  function body(f) {
+    var c = app.fileCache[cacheKey(f.path, f.size)];
+    if (c === undefined) return '<p class="small mute" style="margin:0">Loading…</p>';
+    if (c === null) return '<p class="small mute" style="margin:0">Could not load ' + esc(f.path) + '.</p>';
+    var t = c.trim();
+    if (t.length > 4000) t = t.slice(0, 4000) + '\n…';
+    return t ? '<div class="prewrap" style="font-size:13px;line-height:19px">' + esc(t) + '</div>' : '<p class="small mute" style="margin:0">(empty file)</p>';
+  }
+  function paint() {
+    var h = '';
+    if (st) {
+      h += '<section class="card runstop" aria-labelledby="h-runstop"><div class="row wrapflex" style="gap:8px">' +
+        '<h2 id="h-runstop" style="font-size:15px">' + chip('Stopped by the runner', 'fail', 'big') + '</h2><span class="grow"></span>' +
+        fileLink({ path: st.path, p: 'runs/stopped.md' }) + '</div>' + body(st) + '</section>';
+    }
+    if (wn) {
+      h += '<section class="decide" style="gap:8px" aria-labelledby="h-runwarn"><div class="row wrapflex" style="gap:8px">' +
+        '<h2 id="h-runwarn" style="font-size:15px">' + chip('Runner warnings', 'warn') + '</h2><span class="grow"></span>' +
+        fileLink({ path: wn.path, p: 'runs/warnings.md' }) + '</div>' + body(wn) + '</section>';
+    }
+    withFocus(function () { setHTML(el, h); });
+  }
+  paint();
+  [st, wn].forEach(function (f) {
+    if (f && app.fileCache[cacheKey(f.path, f.size)] === undefined) fetchContent(f.path, f.size).then(paint);
+  });
+}
+
+function jobHeadHTML(j) {
+  var parts = [];
+  var iu = safeUrl(j.issue_url), pu = safeUrl(j.pr_url);
+  if (j.issue !== undefined && j.issue !== null) parts.push('Issue ' + (iu ? '<a href="' + esc(iu) + '" target="_blank" rel="noopener noreferrer">#' + esc(j.issue) + '</a>' : '#' + esc(j.issue)));
+  if (j.pr !== undefined && j.pr !== null) parts.push('Pull request ' + (pu ? '<a href="' + esc(pu) + '" target="_blank" rel="noopener noreferrer">#' + esc(j.pr) + '</a>' : '#' + esc(j.pr)));
+  else if (RUNNING.indexOf(j.stage) >= 0 || WAITING.indexOf(j.stage) >= 0) parts.push('No pull request yet');
+  if (roundOf(j)) parts.push('Round ' + esc(roundOf(j)) + (num(j.round_limit) ? ' of ' + esc(j.round_limit) : ''));
+  parts.push(esc(elapsed(j)));
+  parts.push(esc(fmtUsd(jobCost(j))) + (obj(j.cost).partial ? ' (partial)' : ''));
+  return '<div class="jd-top"><div class="row wrapflex" style="gap:8px">' + stageChip(j) + riskChip(j) + surfaceChips(j) +
+    '<span class="mono small mute">' + esc(j.id) + '</span></div>' +
+    '<h1>' + esc(jobTitle(j)) + '</h1>' +
+    '<div class="jd-line">' + parts.join(' · ') + '</div></div>';
+}
+
+function stageTimes(j) {
+  var h = arr(j.history).filter(function (x) { return x && x.at; }).slice()
+    .sort(function (a, b) { return (toMs(a.at) || 0) - (toMs(b.at) || 0); });
+  var t = {}, prevAt = toMs(j.started), prevStage = h.length ? h[0].from : j.stage;
+  h.forEach(function (e) {
+    var at = toMs(e.at);
+    if (isFinite(prevAt) && isFinite(at) && prevStage) t[prevStage] = (t[prevStage] || 0) + Math.max(0, at - prevAt);
+    prevAt = at; prevStage = e.to;
+  });
+  if (!j.ended && prevStage && isFinite(prevAt) && RUNNING.indexOf(prevStage) >= 0) t[prevStage] = (t[prevStage] || 0) + Math.max(0, Date.now() - prevAt);
+  return t;
+}
+
+function costFor(j, key) {
+  var by = obj(obj(j.cost).by_agent);
+  var cands = [key, 'reviewer-' + key, 'review-' + key, key + '-reviewer'];
+  for (var i = 0; i < cands.length; i++) if (num(by[cands[i]]) !== null) return by[cands[i]];
+  return null;
+}
+function modelFor(j, key) {
+  var ag = obj(j.agents);
+  if (typeof ag[key] === 'string') return ag[key];
+  var m = str(key).match(/^(?:reviewer-|review-)?(code|security|ux|ui|data|access)(?:-reviewer)?$/);
+  if (m && obj(ag.reviewers)[m[1]]) return str(obj(ag.reviewers)[m[1]]);
+  var models = obj(cfgSaved().models);
+  return models[key] ? str(models[key]) : '';
+}
+function agentMeta(j, key, stage, times) {
+  var parts = [], m = modelFor(j, key), c = costFor(j, key);
+  if (m) parts.push(cap(m));
+  if (stage && times[stage]) parts.push(fmtDur(times[stage]));
+  if (c !== null) parts.push(fmtUsd(c));
+  return parts.join(' · ');
+}
+function verdictOf(line) {
+  var s = str(line).trim();
+  if (!s) return null;
+  var m = s.match(/^[A-Z][A-Z_-]*:\s*(.+)$/);
+  if (m) return m[1].trim();
+  if (/^#/.test(s)) return null;
+  return s.length <= 24 ? s : null;
+}
+function revLabel(r) { return REVIEWER_LABEL[r] || cap(r); }
+function agentLabel(k) {
+  if (AGENT_LABEL[k]) return AGENT_LABEL[k];
+  var m = str(k).match(/^(?:reviewer-|review-)?(code|security|ux|ui|data|access)(?:-reviewer)?$/);
+  if (m) return revLabel(m[1]) + ' reviewer';
+  return cap(str(k).replace(/[-_]/g, ' '));
+}
+
+function buildSteps(j, files) {
+  var fs = arr(files).filter(function (f) { return f && typeof f.path === 'string'; }).map(function (f) {
+    return { path: f.path, p: f.path.replace(/\\/g, '/').replace(/^\.\//, ''), first: str(f.first_line), summary: arr(f.summary).map(str), size: f.size };
+  });
+  var by = {};
+  fs.forEach(function (f) { by[f.p] = f; });
+  var times = stageTimes(j), steps = [];
+  function fileStep(name, f, extra) {
+    var v = verdictOf(f.first);
+    var s = { name: name, verdict: v, cls: verdictCls(v), meta: '', bullets: f.summary, files: [f], kind: 'file' };
+    if (extra) Object.keys(extra).forEach(function (k) { s[k] = extra[k]; });
+    return s;
+  }
+
+  fs.filter(function (f) { return /^intake-\d+\.md$/.test(f.p); })
+    .sort(function (a, b) { return parseInt(a.p.slice(7), 10) - parseInt(b.p.slice(7), 10); })
+    .forEach(function (f) { steps.push(fileStep('Intake · before the author replied', f)); });
+  if (by['intake.md']) steps.push(fileStep('Intake', by['intake.md'], { meta: agentMeta(j, 'intake', 'intake', times) }));
+
+  var revs = obj(obj(j.agents).reviewers);
+  if (Object.keys(revs).length || typeof j.auto_merge === 'boolean') {
+    var rb = [];
+    if (Object.keys(revs).length) rb.push('Reviewers: ' + Object.keys(revs).map(function (r) { return revLabel(r) + ' on ' + cap(revs[r]); }).join(', '));
+    if (typeof j.auto_merge === 'boolean') rb.push('Auto-merge ' + (j.auto_merge ? 'on: the approver may merge on its own' : 'off' + (amReason(j) || ': a human merges')));
+    steps.push({ name: 'Route', verdict: 'script', cls: 'pend', meta: 'factory/bin/route.py', bullets: rb, files: [], kind: 'route' });
+  }
+
+  if (by['spec.md']) {
+    var sp = fileStep('Spec', by['spec.md'], { meta: agentMeta(j, 'spec-writer', 'spec', times) });
+    if (!sp.verdict) { sp.verdict = 'written'; sp.cls = 'info'; }
+    steps.push(sp);
+  }
+
+  var rset = {};
+  fs.forEach(function (f) { var m = f.p.match(/^round-(\d+)\//); if (m) rset[+m[1]] = 1; });
+  var jr = roundOf(j);
+  if (jr !== null && jr > 0 && RUNNING.concat(WAITING).indexOf(j.stage) >= 0) rset[jr] = 1;
+  var rounds = Object.keys(rset).map(Number).sort(function (a, b) { return a - b; });
+  var fb = {};
+  fs.forEach(function (f) { var m = f.p.match(/^feedback-(\d+)\.md$/); if (m) fb[+m[1]] = f; });
+  var impl = by['impl.md'];
+  var implRound = jr || (rounds.length ? rounds[rounds.length - 1] : 1);
+  var implDone = false, fbDone = {};
+  function feedbackStep(k) {
+    var f = fb[k];
+    var s = fileStep('Your feedback ' + k, f);
+    s.verdict = 'sent'; s.cls = 'info';
+    if (!s.bullets.length && f.first) s.bullets = [f.first];
+    fbDone[k] = 1;
+    return s;
+  }
+  function implStep(n) {
+    implDone = true;
+    var s = fileStep('Implement · round ' + n, impl, { meta: agentMeta(j, 'implementer', rounds.length <= 1 ? 'implement' : null, times) });
+    return s;
+  }
+  rounds.forEach(function (n) {
+    if (fb[n - 1] && !fbDone[n - 1]) steps.push(feedbackStep(n - 1));
+    if (impl && !implDone && (n >= implRound || n === rounds[rounds.length - 1])) steps.push(implStep(n));
+    var g = by['round-' + n + '/checks.md'];
+    if (g) steps.push(fileStep('Gate · round ' + n, g, { meta: 'script', checksPath: g.path, checksSize: g.size }));
+    var re = new RegExp('^round-' + n + '/review-([A-Za-z0-9_-]+)\\.md$');
+    var rf = fs.filter(function (f) { return re.test(f.p); });
+    if (rf.length) {
+      var subs = rf.map(function (f) {
+        var r = f.p.match(re)[1], v = verdictOf(f.first);
+        return { r: r, verdict: v, cls: verdictCls(v), model: revs[r] ? cap(revs[r]) : '', bullets: f.summary, file: f };
+      });
+      var passN = subs.filter(function (x) { return str(x.verdict).toUpperCase() === 'PASS'; }).length;
+      var anyChanges = subs.some(function (x) { return str(x.verdict).toUpperCase() === 'CHANGES'; });
+      var rc = 0, haveCost = false;
+      subs.forEach(function (x) { var c = costFor(j, x.r); if (c !== null) { rc += c; haveCost = true; } });
+      steps.push({
+        name: 'Reviews · round ' + n, verdict: passN + ' of ' + subs.length + ' PASS',
+        cls: anyChanges ? 'fail' : passN === subs.length ? 'pass' : 'pend',
+        meta: 'parallel' + (haveCost && rounds.length <= 1 ? ' · ' + fmtUsd(rc) : ''),
+        bullets: [], files: [], kind: 'reviews', subs: subs
+      });
+    }
+    var mg = by['round-' + n + '/merge-checks.md'];
+    if (mg) steps.push(fileStep('Merge gate · round ' + n, mg, { meta: 'script', checksPath: mg.path, checksSize: mg.size }));
+  });
+  if (impl && !implDone) steps.push(implStep(implRound));
+  Object.keys(fb).map(Number).sort(function (a, b) { return a - b; }).forEach(function (k) { if (!fbDone[k]) steps.push(feedbackStep(k)); });
+
+  if (by['decision.md']) {
+    var d = fileStep('Approver', by['decision.md'], { meta: agentMeta(j, 'approver', 'approve', times) });
+    if (str(d.verdict).toUpperCase() === 'APPROVE' && j.held) { d.verdict = 'APPROVE → held for you'; d.cls = 'warn'; }
+    steps.push(d);
+  }
+  if (by['rejection.md']) {
+    var rj = fileStep('Rejected', by['rejection.md']);
+    rj.verdict = 'REJECTED'; rj.cls = 'fail';
+    if (!rj.bullets.length && by['rejection.md'].first) rj.bullets = [by['rejection.md'].first];
+    steps.push(rj);
+  }
+  return steps;
+}
+
+function fileLink(f) {
+  if (/\.(png|jpe?g|gif|webp)$/i.test(f.p)) return '<span class="mono mute">' + esc(f.p) + ' (image)</span>';
+  return '<button type="button" class="linkbtn mono" data-action="open-file" data-path="' + esc(f.path) + '">' + esc(f.p) + '</button>';
+}
+function bulletsHTML(b) {
+  if (!b || !b.length) return '<p class="mute" style="margin:0;font-size:13px">No summary in this file.</p>';
+  return '<ul class="bul">' + b.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
+}
+function chkId(path) { return 'chk-' + idSafe(path); }
+
+function stepsHTML(steps, files) {
+  var h = '';
+  if (!steps.length) h += '<div class="empty">No agent has written a file for this job yet.</div>';
+  else {
+    h += '<ol class="steps">' + steps.map(function (s, i) {
+      var out = '<li class="step"><div class="step-h"><span class="step-n" aria-hidden="true">' + (i + 1) + '</span>' +
+        '<h3 class="step-t">' + esc(s.name) + '</h3>' + (s.verdict ? chip(s.verdict, s.cls) : '') +
+        '<span class="grow"></span><span class="step-m">' + esc(s.meta || '') + '</span></div>';
+      if (s.kind === 'reviews') {
+        out += s.subs.map(function (x) {
+          return '<div class="subrev"><div class="subrev-h"><strong>' + esc(revLabel(x.r)) + '</strong>' + (x.model ? '<span class="mute">· ' + esc(x.model) + '</span>' : '') +
+            (x.verdict ? chip(x.verdict, x.cls) : '') + '</div>' + bulletsHTML(x.bullets) +
+            '<div class="files">' + fileLink(x.file) + '</div></div>';
+        }).join('');
+      } else {
+        out += s.kind === 'route' ? (s.bullets.length ? bulletsHTML(s.bullets) : '') : bulletsHTML(s.bullets);
+      }
+      if (s.checksPath) out += '<div class="chk" id="' + chkId(s.checksPath) + '">' + checksBlockHTML(s.checksPath, s.checksSize) + '</div>';
+      if (s.files && s.files.length) out += '<div class="files">' + s.files.map(fileLink).join('') + '</div>';
+      return out + '</li>';
+    }).join('') + '</ol>';
+  }
+  var all = arr(files).filter(function (f) { return f && typeof f.path === 'string'; });
+  if (all.length) {
+    h += '<div class="card" style="padding:14px 18px"><details id="jd-allfiles"' + (app.allFilesOpen ? ' open' : '') + '><summary>All files in the job folder (' + all.length + ')</summary><ul class="stack" style="list-style:none;margin:0;padding:0;gap:6px;font-size:12px">' +
+      all.map(function (f) {
+        var ff = { path: f.path, p: f.path.replace(/\\/g, '/') };
+        return '<li class="row wrapflex" style="gap:8px">' + fileLink(ff) + '<span class="mute">' + esc(fmtSize(f.size)) + '</span></li>';
+      }).join('') + '</ul></details></div>';
+  }
+  return h;
+}
+
+function cacheKey(path, size) { return (app.job ? app.job.id : '') + '|' + path + '|' + str(size); }
+
+function fetchContent(path, size) {
+  var key = cacheKey(path, size);
+  if (app.fileCache[key] !== undefined) return Promise.resolve(app.fileCache[key]);
+  if (app.fileInflight[key]) return app.fileInflight[key];
+  var id = app.route.id;
+  var p = api('GET', '/api/jobs/' + encodeURIComponent(id) + '/file?path=' + encodeURIComponent(path)).then(function (r) {
+    delete app.fileInflight[key];
+    var v = r.ok && r.data && typeof r.data.content === 'string' ? r.data.content : null;
+    app.fileCache[key] = v;
+    return v;
+  });
+  app.fileInflight[key] = p;
+  return p;
+}
+
+function parseTableRow(line) {
+  return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(function (c) { return c.trim(); });
+}
+function parseChecks(md) {
+  var out = { gate: null, commit: null, steps: [], rules: [], failure: '' };
+  var sec = '';
+  str(md).split(/\r?\n/).forEach(function (line) {
+    var m;
+    if (!sec && (m = line.match(/^GATE:\s*(\S+)/))) { out.gate = m[1]; return; }
+    if (!sec && (m = line.match(/^COMMIT:\s*(\S+)/))) { out.commit = m[1]; return; }
+    if ((m = line.match(/^##\s+(.+?)\s*$/))) { sec = m[1].toLowerCase(); return; }
+    if (sec === 'steps' || sec === 'built-in rules') {
+      if (!/^\s*\|/.test(line)) return;
+      var cells = parseTableRow(line);
+      if (cells.every(function (c) { return /^:?-{2,}:?$/.test(c) || c === ''; })) return;
+      var head = cells[0].toLowerCase();
+      if (head === 'step' || head === 'rule') return;
+      (sec === 'steps' ? out.steps : out.rules).push(cells);
+    } else if (sec === 'failure') {
+      out.failure += line + '\n';
+    }
+  });
+  return out;
+}
+function resultText(res) {
+  var m = str(res).match(/^(PASS|OK)\s*:\s*(.+)$/i);
+  return m ? m[2] : str(res);
+}
+function checksTableHTML(md) {
+  var p = parseChecks(md);
+  var rows = p.steps.map(function (c) { return { name: c[0], res: c[1] || '', time: c[2] || '—' }; })
+    .concat(p.rules.map(function (c) { return { name: c[0], res: c[1] || '', time: '—' }; }));
+  var h = '';
+  if (rows.length) {
+    h += '<div class="tblbox"><table class="tbl" style="min-width:420px"><thead><tr><th scope="col">Step</th><th scope="col">Result</th><th scope="col">Time</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(r.name) + '</td><td>' + chip(resultText(r.res), verdictCls(r.res)) + '</td><td class="mute nowrap">' + esc(r.time) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  if (p.failure.trim()) {
+    h += '<details style="margin-top:8px"><summary>Failure output</summary><pre class="pre mono">' + esc(p.failure.replace(/\s+$/, '')) + '</pre></details>';
+  }
+  return h;
+}
+function checksBlockHTML(path, size) {
+  var v = app.fileCache[cacheKey(path, size)];
+  if (v === undefined) return '<p class="mute small" style="margin:0">Loading step results…</p>';
+  if (v === null) return '<p class="mute small" style="margin:0">Could not load the step results.</p>';
+  return checksTableHTML(v);
+}
+function hydrateChecks(steps) {
+  steps.forEach(function (s) {
+    if (!s.checksPath) return;
+    if (app.fileCache[cacheKey(s.checksPath, s.checksSize)] !== undefined) return;
+    fetchContent(s.checksPath, s.checksSize).then(function () {
+      var el = $(chkId(s.checksPath));
+      if (el) el.innerHTML = checksBlockHTML(s.checksPath, s.checksSize);
+    });
+  });
+}
+
+function extractSection(md, title) {
+  var lines = str(md).split(/\r?\n/), out = [], on = false;
+  var re = new RegExp('^##\\s+' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'i');
+  for (var i = 0; i < lines.length; i++) {
+    if (re.test(lines[i])) { on = true; continue; }
+    if (on && /^##\s/.test(lines[i])) break;
+    if (on) out.push(lines[i]);
+  }
+  return out.join('\n').trim();
+}
+function hydrateForHuman(j, files) {
+  if (j.stage !== 'needs-human') return;
+  var f = arr(files).filter(function (x) { return x && typeof x.path === 'string' && x.path.replace(/\\/g, '/') === 'decision.md'; })[0];
+  if (!f) return;
+  fetchContent(f.path, f.size).then(function (c) {
+    var el = $('jd-forhuman');
+    if (!el || c === null) return;
+    var t = extractSection(c, 'For the human');
+    el.innerHTML = t ? '<div class="lookat"><div class="lookat-h">From the approver</div><div class="prewrap">' + esc(t) + '</div></div>' : '';
+  });
+}
+
+function rejectBlockHTML() {
+  return '<div class="stack" style="gap:8px">' +
+    '<button type="button" class="btn btn-danger" id="btn-show-reject" data-action="show-reject" aria-expanded="false" aria-controls="reject-form">Reject this job…</button>' +
+    '<div id="reject-form" class="stack" style="gap:6px" hidden>' +
+      '<label for="rj-text" class="lbl">Why are you rejecting it?</label>' +
+      '<textarea id="rj-text" class="field" rows="3" placeholder="Saved in the job folder as rejection.md"></textarea>' +
+      '<div class="btnrow"><button type="button" class="btn btn-danger solid" data-action="confirm-reject">Reject job</button>' +
+      '<button type="button" class="btn" data-action="cancel-reject">Cancel</button></div>' +
+    '</div></div>';
+}
+
+function decisionHTML(j) {
+  var pu = safeUrl(j.pr_url), iu = safeUrl(j.issue_url), r = roundOf(j);
+  var msg = '<div id="decide-msg" class="msg" role="status" aria-live="polite"></div>';
+  if (j.stage === 'needs-human') {
+    var p = j.held
+      ? 'The factory approved this job, but auto-merge is off for it' + amReason(j) + '. Check the pull request, then merge it on GitHub to approve it.'
+      : 'The factory stopped and needs your call. Read the steps on the left, then send feedback for another round or reject the job.';
+    return '<section class="decide" aria-labelledby="h-decide"><h2 id="h-decide">Your decision</h2><p>' + esc(p) + '</p>' +
+      '<div id="jd-forhuman"></div>' +
+      (pu ? '<a class="btn btn-primary" href="' + esc(pu) + '" target="_blank" rel="noopener noreferrer">Open PR' + (j.pr !== undefined && j.pr !== null ? ' #' + esc(j.pr) : '') + ' on GitHub</a>' : '') +
+      '<div class="fb"><label for="fb-text" class="lbl">' + (pu ? 'Or ask for changes' : 'Ask for changes') + '</label>' +
+      '<textarea id="fb-text" class="field" rows="3" placeholder="e.g. Use \'medium\' instead of \'normal\' as the default priority"></textarea>' +
+      '<button type="button" class="btn" id="btn-fb" data-action="send-feedback">Send feedback and start ' + (r !== null ? 'round ' + (r + 1) : 'another round') + '</button></div>' +
+      rejectBlockHTML() + msg + '</section>';
+  }
+  if (j.stage === 'needs-info') {
+    return '<section class="decide" aria-labelledby="h-decide"><h2 id="h-decide">Waiting for the author</h2>' +
+      '<p>Intake asked questions on the issue. When the author replies, the factory runs intake again. You can also reject the job now.</p>' +
+      (iu ? '<a class="btn btn-primary" href="' + esc(iu) + '" target="_blank" rel="noopener noreferrer">Open issue ' + esc(issueRef(j)) + ' on GitHub</a>' : '') +
+      rejectBlockHTML() + msg + '</section>';
+  }
+  var txt;
+  if (j.stage === 'merged') txt = 'Merged. Nothing left to do.';
+  else if (j.stage === 'rejected') txt = 'Rejected. Nothing left to do.';
+  else txt = 'The factory is working on this job (' + stageLabel(j.stage).toLowerCase() + '). This page refreshes every 5 seconds.';
+  return '<section class="card" aria-labelledby="h-decide"><h2 id="h-decide">Status</h2><p style="margin:0">' + esc(txt) + '</p>' +
+    (pu ? '<div><a class="btn" href="' + esc(pu) + '" target="_blank" rel="noopener noreferrer">Open PR' + (j.pr !== undefined && j.pr !== null ? ' #' + esc(j.pr) : '') + ' on GitHub</a></div>' : '') + '</section>';
+}
+
+function factsHTML(j) {
+  var revs = obj(obj(j.agents).reviewers);
+  var rl = Object.keys(revs).map(function (r) { return revLabel(r) + ' (' + cap(revs[r]) + ')'; }).join(', ');
+  var am = typeof j.auto_merge === 'boolean' ? (j.auto_merge ? 'On' : 'Off' + amReason(j)) : 'Not routed yet';
+  function row(dt, dd, mono) { return '<dt>' + esc(dt) + '</dt><dd' + (mono ? ' class="mono"' : '') + '>' + esc(dd === null || dd === undefined || dd === '' ? '—' : dd) + '</dd>'; }
+  return '<h2 id="h-facts">Job</h2><dl class="facts">' +
+    row('Job id', j.id, true) +
+    row('Branch', j.branch, true) +
+    row('Worktree', j.worktree, true) +
+    row('Job database', j.db ? j.db + ' (local)' : 'none', true) +
+    row('Dev server port', j.port, true) +
+    row('Reviewers routed', rl || 'Not routed yet') +
+    row('Auto-merge', am) +
+    row('Started', fmtWhen(j.started)) +
+    (j.ended ? row('Ended', fmtWhen(j.ended)) : '') +
+    '</dl>';
+}
+
+function costHTML(j) {
+  var c = obj(j.cost), by = obj(c.by_agent);
+  var order = ['intake', 'spec-writer', 'implementer'];
+  var keys = Object.keys(by).sort(function (a, b) {
+    var ia = order.indexOf(a), ib = order.indexOf(b);
+    if (a === 'approver') ia = 99; if (b === 'approver') ib = 99;
+    if (ia < 0) ia = 50; if (ib < 0) ib = 50;
+    return ia - ib || (a < b ? -1 : a > b ? 1 : 0);
+  });
+  var h = '<h2 id="h-cost">Cost by agent</h2><div class="stack" style="gap:8px">';
+  if (!keys.length) h += '<p class="mute" style="margin:0;font-size:13px">No cost recorded yet.</p>';
+  keys.forEach(function (k) {
+    var m = modelFor(j, k);
+    h += '<div class="costrow"><span>' + esc(agentLabel(k)) + (m ? ' <span class="mute">· ' + esc(cap(m)) + '</span>' : '') + '</span><span class="mono">' + fmtUsd(num(by[k])) + '</span></div>';
+  });
+  h += '<div class="costrow total"><span>Total</span><span class="mono">' + fmtUsd(num(c.usd)) + '</span></div>';
+  if (c.partial) h += '<div class="small" style="color:var(--warn-ink)">Partial: some models used have no price in config.json (prices_usd_per_mtok).</div>';
+  h += '<div class="small mute">API-equivalent price from Claude Code transcripts, not your bill.</div></div>';
+  return h;
+}
+
+function setDecideMsg(text, kind) {
+  var el = $('decide-msg');
+  if (!el) return;
+  el.className = 'msg' + (kind ? ' ' + kind : '');
+  el.textContent = text || '';
+}
+
+function sendFeedback() {
+  var j = app.job && app.job.job, ta = $('fb-text'), btn = $('btn-fb');
+  if (!j || !ta) return;
+  var text = ta.value.trim();
+  if (!text) { setDecideMsg('Write what should change first.', 'err'); ta.setAttribute('aria-invalid', 'true'); ta.focus(); return; }
+  ta.removeAttribute('aria-invalid');
+  var r = roundOf(j);
+  if (!window.confirm('Send this feedback to job ' + issueRef(j) + ' and start ' + (r !== null ? 'round ' + (r + 1) : 'another round') + '?')) return;
+  btn.disabled = true;
+  setDecideMsg('Sending…');
+  api('POST', '/api/jobs/' + encodeURIComponent(app.route.id) + '/feedback', { text: text }).then(function (res) {
+    btn.disabled = false;
+    if (res.ok) {
+      ta.value = '';
+      toast('Feedback sent. The job goes back to the implementer.');
+      if (res.data && res.data.job && app.job) app.job.job = res.data.job;
+      app.decisionKey = null;
+      renderJobParts();
+      loadJob(app.route.id, true);
+      refreshState();
+    } else {
+      setDecideMsg(errText(res, 'Feedback was not sent'), 'err');
+    }
+  });
+}
+
+function rejectJob() {
+  var j = app.job && app.job.job, ta = $('rj-text');
+  if (!j || !ta) return;
+  var text = ta.value.trim();
+  if (!text) { setDecideMsg('Give a reason for rejecting it.', 'err'); ta.setAttribute('aria-invalid', 'true'); ta.focus(); return; }
+  ta.removeAttribute('aria-invalid');
+  if (!window.confirm('Reject job ' + issueRef(j) + ' (' + jobTitle(j) + ')? This ends the job.')) return;
+  setDecideMsg('Rejecting…');
+  api('POST', '/api/jobs/' + encodeURIComponent(app.route.id) + '/reject', { text: text }).then(function (res) {
+    if (res.ok) {
+      toast('Job rejected.');
+      if (res.data && res.data.job && app.job) app.job.job = res.data.job;
+      app.decisionKey = null;
+      renderJobParts();
+      loadJob(app.route.id, true);
+      refreshState();
+    } else {
+      setDecideMsg(errText(res, 'The job was not rejected'), 'err');
+    }
+  });
+}
+
+/* ------------------------------------------------------------------ modal */
+
+function openModal(title, bodyHTML) {
+  var d = $('modal');
+  $('modal-title').textContent = title;
+  $('modal-body').innerHTML = bodyHTML;
+  if (!d.open) {
+    app.modalReturn = document.activeElement;
+    if (typeof d.showModal === 'function') d.showModal();
+    else { d.setAttribute('open', ''); d.classList.add('fallback'); }
+  }
+  $('modal-body').scrollTop = 0;
+  var cb = d.querySelector('[data-action="close-modal"]');
+  if (cb) cb.focus();
+}
+function setModalBody(html) { if ($('modal').open) $('modal-body').innerHTML = html; }
+function closeModal() {
+  var d = $('modal');
+  if (d.classList.contains('fallback')) { d.removeAttribute('open'); d.classList.remove('fallback'); onModalClosed(); }
+  else if (typeof d.close === 'function' && d.open) d.close();
+}
+function onModalClosed() {
+  var r = app.modalReturn;
+  app.modalReturn = null;
+  if (r && document.contains(r) && typeof r.focus === 'function') r.focus();
+}
+
+function openFile(path) {
+  openModal(path, '<span class="mute">Loading…</span>');
+  api('GET', '/api/jobs/' + encodeURIComponent(app.route.id) + '/file?path=' + encodeURIComponent(path)).then(function (r) {
+    if (r.ok && r.data && typeof r.data.content === 'string') setModalBody(r.data.content ? esc(r.data.content) : '<span class="mute">(empty file)</span>');
+    else setModalBody(esc(errText(r, 'Could not load the file')));
+  });
+}
+
+function diffHTML(diff) {
+  if (!str(diff).trim()) return '<span class="mute">No uncommitted changes to factory/config.json.</span>';
+  return str(diff).split(/\r?\n/).map(function (l) {
+    var c = /^\+(?!\+\+)/.test(l) ? 'd-add' : /^-(?!--)/.test(l) ? 'd-del' : /^@@/.test(l) ? 'd-hunk' : '';
+    return c ? '<span class="' + c + '">' + esc(l) + '</span>' : esc(l);
+  }).join('\n');
+}
+function showDiff() {
+  openModal('Uncommitted changes to factory/config.json', '<span class="mute">Loading…</span>');
+  api('GET', '/api/config/diff').then(function (r) {
+    if (r.ok && r.data) setModalBody(diffHTML(r.data.diff));
+    else setModalBody(esc(errText(r, 'Could not load the diff')));
+  });
+}
+
+/* ------------------------------------------------------------------ settings */
+
+function settingsHTML() {
+  var sec = app.route.section;
+  var nav = '<nav aria-label="Settings" class="snav-wrap"><div class="snav-title" aria-hidden="true">Settings</div>' +
+    SECTIONS.map(function (x) {
+      return '<a class="snav" href="#/settings/' + x.key + '"' + (x.key === sec ? ' aria-current="page"' : '') + '>' + esc(x.name) + '</a>';
+    }).join('') + '</nav>';
+  var body;
+  if (!app.state) body = '<p class="mute" role="status">' + (app.stateErr ? esc(app.stateErr) : 'Loading settings…') + '</p>';
+  else if (!app.draft) body = '<div class="errors" role="alert">serve.py did not return a readable config.json. Fix the file by hand, then reload this page.</div>';
+  else body = '<div id="cfg-banner">' + (app.state.config_dirty ? configBannerHTML() : '') + '</div>' +
+    '<div id="sec-body" class="stack" style="gap:20px">' + sectionHTML(sec) + '</div>' +
+    '<div id="save-errors"></div>' + savebarHTML();
+  return '<div class="wrap settings">' + nav + '<main class="settings-main">' + body + '</main></div>';
+}
+
+function sectionHTML(sec) {
+  switch (sec) {
+    case 'environment': return envSection();
+    case 'routing': return routingSection();
+    case 'runner': return runnerSection();
+    case 'limits': return limitsSection();
+    case 'protected': return protectedSection();
+    case 'run': return runSection();
+    case 'history': return historySection();
+    default: return checksSection();
+  }
+}
+
+function intro(title, text) {
+  return '<div class="intro"><h1>' + esc(title) + '</h1>' + (text ? '<p>' + text + '</p>' : '') + '</div>';
+}
+
+function fieldId(path) { return 'f-' + path.replace(/[^A-Za-z0-9_-]/g, '-'); }
+
+function textField(path, label, help, opts) {
+  opts = opts || {};
+  var v = getPath(app.draft, path), id = fieldId(path);
+  var val = opts.type === 'list' ? arr(v).join(', ') : (v === null || v === undefined ? '' : v);
+  var hid = help ? id + '-help' : '';
+  return '<div class="fld' + (opts.full ? ' full' : '') + '"><label class="lbl" for="' + id + '">' +
+    (opts.srPrefix ? '<span class="visually-hidden">' + esc(opts.srPrefix) + ' </span>' : '') + esc(label) + '</label>' +
+    '<input id="' + id + '" class="field' + (opts.mono ? ' mono' : '') + '" type="' + (opts.input || 'text') + '"' +
+    (opts.min !== undefined ? ' min="' + opts.min + '"' : '') + (opts.max !== undefined ? ' max="' + opts.max + '"' : '') +
+    (opts.step !== undefined ? ' step="' + opts.step + '"' : '') +
+    ' data-bind="' + esc(path) + '" data-type="' + (opts.type || 'str') + '" value="' + esc(val) + '"' +
+    (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
+    (hid ? ' aria-describedby="' + hid + '"' : '') + ' spellcheck="false" autocomplete="off">' +
+    (help ? '<span class="help" id="' + hid + '">' + help + '</span>' : '') + '</div>';
+}
+
+function selectHTML(id, path, value, options, attrs, type) {
+  var opts = options.slice();
+  var has = opts.some(function (o) { return String(o.v) === String(value); });
+  if (!has) opts.unshift({ v: value === undefined || value === null ? '' : value, t: value === undefined || value === null || value === '' ? '(not set)' : String(value) });
+  return '<select class="field" id="' + id + '" data-bind="' + esc(path) + '" data-type="' + (type || 'str') + '"' + (attrs || '') + '>' +
+    opts.map(function (o) { return '<option value="' + esc(o.v) + '"' + (String(o.v) === String(value) ? ' selected' : '') + '>' + esc(o.t) + '</option>'; }).join('') + '</select>';
+}
+function modelSelect(path, value, ariaLabel) {
+  return selectHTML(fieldId(path), path, value, MODELS.map(function (m) { return { v: m, t: cap(m) }; }), ariaLabel ? ' aria-label="' + esc(ariaLabel) + '"' : '');
+}
+
+/* --- check steps --- */
+
+function checksSection() {
+  var c = app.draft, checks = arr(c.checks);
+  var on = checks.filter(function (x) { return x && x.enabled !== false; }).length;
+  var h = intro('Check steps', 'The gate runs these in order, in each job\'s own worktree and database, before any reviewer starts and again just before merging. Nothing is assumed: there is no install or build step unless you add one. Each command must run without prompts, must not rewrite files, and must exit non-zero when it fails.');
+  if (!checks.length) {
+    h += '<section aria-labelledby="h-empty" class="emptystate">' +
+      '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#5E5E66" stroke-width="1.6" aria-hidden="true" focusable="false"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12h8M12 8v8"></path></svg>' +
+      '<h2 id="h-empty">No check steps yet</h2>' +
+      (c.checks_none_ok === true ? chip('No automated checks: reviewers only', 'warn', 'big') : chip('● Gate blocked · no check steps', 'fail', 'big')) +
+      '<p>Add the checks this project actually has, such as lint, tests or a migration check. Until there is at least one step, or you turn on “No automated checks” below, the gate won\'t run any job.</p>' +
+      '<div class="btnrow" style="justify-content:center"><button type="button" class="btn btn-primary" id="btn-add-check" data-action="add-check">+ Add your first step</button></div>' +
+      '</section>';
+  } else {
+    h += '<section aria-labelledby="h-steps" class="card" style="padding:0;gap:0">' +
+      '<div class="row wrapflex" style="gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)">' +
+      '<h2 id="h-steps" style="flex:1 1 auto">Steps <span style="font-weight:500;color:var(--mute)">· ' + on + ' on, ' + (checks.length - on) + ' off</span></h2>' +
+      '<button type="button" class="btn btn-primary" id="btn-add-check" data-action="add-check">+ Add step</button></div>' +
+      '<div style="overflow-x:auto"><table class="tbl" style="min-width:880px"><caption class="visually-hidden">Check steps, run in this order</caption>' +
+      '<thead><tr><th scope="col" style="width:86px">Order</th><th scope="col" style="width:50px">On</th><th scope="col" style="width:170px">Name</th><th scope="col">Command</th><th scope="col" style="width:130px">Timeout</th><th scope="col" style="width:90px">Retry</th><th scope="col" style="width:52px"><span class="visually-hidden">Remove</span></th></tr></thead><tbody>' +
+      checks.map(function (s, i) { return checkRow(obj(s), i, checks.length); }).join('') +
+      '</tbody></table></div>' +
+      '<div style="padding:12px 16px;font-size:13px;color:var(--mute)">Timeout is in seconds. Retry reruns a failing step up to that many times; a pass on retry still passes, marked FLAKY in the job\'s checks.md.</div>' +
+      '</section>';
+  }
+  h += '<div class="two">' +
+    '<section aria-labelledby="h-always" class="card"><h2 id="h-always">Always checked</h2>' +
+    '<p class="card-sub" style="margin:0">Built into the gate. They run whatever steps you set and can\'t be turned off.</p>' +
+    '<ul class="always">' +
+    '<li>' + chip('✓', 'pass', 'sm') + '<span>No existing protected file is changed or deleted (adding new ones is fine). <a href="#/settings/protected">Edit protected paths</a></span></li>' +
+    '<li>' + chip('✓', 'pass', 'sm') + '<span>Diff stays within the budget for the job\'s risk. <a href="#/settings/limits">Edit budgets</a></span></li>' +
+    '<li>' + chip('✓', 'pass', 'sm') + '<span>No secrets, keys or .env values in the diff</span></li>' +
+    '<li>' + chip('✓', 'pass', 'sm') + '<span>The job\'s database and services are on this machine only</span></li>' +
+    '</ul></section>' +
+    '<section aria-labelledby="h-none" class="card"><h2 id="h-none">No automated checks</h2>' +
+    '<div class="switch-row"><input id="f-checks_none_ok" type="checkbox" data-bind="checks_none_ok" data-type="bool"' + (c.checks_none_ok === true ? ' checked' : '') + ' style="accent-color:#A3231A">' +
+    '<label for="f-checks_none_ok">This project has no automated checks. Run jobs anyway, with reviewers as the only safety net.</label></div>' +
+    '<p class="note-sand">When this is on, reviewers move up one model tier and every job goes to you before merging, since nothing proves the code runs.</p>' +
+    '</section></div>';
+  h += '<section aria-labelledby="h-test" class="card" id="sec-test"></section>';
+  return h;
+}
+
+function checkRow(s, i, n) {
+  var nm = str(s.name) || 'step ' + (i + 1);
+  var off = s.enabled === false;
+  var p = 'checks.' + i + '.';
+  var retry = s.retry_on_fail === undefined || s.retry_on_fail === null ? 0 : s.retry_on_fail;
+  return '<tr' + (off ? ' class="off"' : '') + '>' +
+    '<td><div class="row" style="gap:4px">' +
+      '<button type="button" class="icon-btn" id="mv-' + i + '-up" data-action="move-check" data-i="' + i + '" data-dir="-1" aria-label="Move ' + esc(nm) + ' up"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+      '<button type="button" class="icon-btn" id="mv-' + i + '-down" data-action="move-check" data-i="' + i + '" data-dir="1" aria-label="Move ' + esc(nm) + ' down"' + (i === n - 1 ? ' disabled' : '') + '>↓</button>' +
+    '</div></td>' +
+    '<td><input type="checkbox" id="' + fieldId(p + 'enabled') + '" data-bind="' + p + 'enabled" data-type="bool"' + (off ? '' : ' checked') + ' aria-label="' + esc(nm) + ' is on"></td>' +
+    '<td><input class="field" style="width:100%" type="text" id="' + fieldId(p + 'name') + '" data-bind="' + p + 'name" data-type="str" value="' + esc(s.name) + '" aria-label="Name of step ' + (i + 1) + '" placeholder="e.g. tests" spellcheck="false" autocomplete="off"></td>' +
+    '<td><input class="field mono" style="width:100%" type="text" id="' + fieldId(p + 'cmd') + '" data-bind="' + p + 'cmd" data-type="str" value="' + esc(s.cmd) + '" aria-label="' + esc(nm) + ' command" placeholder="non-interactive command, no --fix" spellcheck="false" autocomplete="off"></td>' +
+    '<td><span class="unit"><input class="field" style="width:90px" type="number" min="1" step="1" id="' + fieldId(p + 'timeout') + '" data-bind="' + p + 'timeout" data-type="int" value="' + esc(s.timeout === null || s.timeout === undefined ? '' : s.timeout) + '" aria-label="' + esc(nm) + ' timeout in seconds"><span class="mute" aria-hidden="true">s</span></span></td>' +
+    '<td>' + selectHTML(fieldId(p + 'retry_on_fail'), p + 'retry_on_fail', retry, [0, 1, 2, 3].map(function (x) { return { v: x, t: String(x) }; }), ' aria-label="' + esc(nm) + ' retries"', 'int') + '</td>' +
+    '<td><button type="button" class="icon-btn" id="rm-' + i + '" data-action="remove-check" data-i="' + i + '" aria-label="Remove ' + esc(nm) + '">✕</button></td>' +
+    '</tr>';
+}
+
+/* --- test on main --- */
+
+function preflightHTML() {
+  var pf = app.preflight || { status: 'idle', result: app.state ? app.state.preflight || null : null };
+  var running = pf.status === 'running';
+  var saved = cfgSaved();
+  var base = str(saved.base_branch) || 'main';
+  var h = '<div class="row wrapflex" style="gap:12px"><div style="flex:1 1 300px"><h2 id="h-test" tabindex="-1">Test on main</h2>' +
+    '<p class="card-sub">Runs the saved steps on the latest ' + esc(base) + ' in a throwaway worktree. The factory also does this before every run and won\'t start if ' + esc(base) + ' fails.</p></div>' +
+    '<button type="button" class="btn" id="btn-preflight" data-action="run-preflight"' + (running ? ' disabled' : '') + '>' + (running ? 'Running…' : 'Run on ' + esc(base)) + '</button></div>';
+  h += '<div id="pf-live" class="stack" style="gap:10px" aria-live="polite">';
+  if (running) h += '<div class="row wrapflex" style="gap:10px">' + chip('Running', 'info') + '<span class="small mute">Checking every 2 seconds…</span></div>';
+  var r = pf.result && typeof pf.result === 'object' ? pf.result : null;
+  if (r) {
+    var steps = arr(r.steps), rules = arr(r.rules);
+    var total = 0, haveT = false;
+    steps.forEach(function (s) { if (num(obj(s).seconds) !== null) { total += s.seconds; haveT = true; } });
+    h += '<div class="row wrapflex" style="gap:10px">' + (r.gate ? chip(str(r.gate).toUpperCase(), verdictCls(r.gate)) : '') +
+      '<span class="small mute">' + (running ? 'Previous run ' : 'Last run ') + esc(fmtWhen(r.at)) + (haveT ? ' · ' + esc(fmtSecs(total)) : '') +
+      (r.commit ? ' · commit <span class="mono">' + esc(str(r.commit).slice(0, 10)) + '</span>' : '') + '</span></div>';
+    if (steps.length || rules.length) {
+      h += '<div class="tags">' + steps.map(function (s) {
+        s = obj(s);
+        return chip(str(s.name) + ' · ' + str(s.result) + (num(s.seconds) !== null ? ' · ' + fmtSecs(s.seconds) : ''), verdictCls(s.result));
+      }).join('') + rules.map(function (s) {
+        s = obj(s);
+        return chip(str(s.name) + ' · ' + resultText(s.result), verdictCls(s.result));
+      }).join('') + '</div>';
+    }
+  } else if (!running) {
+    var any = arr(saved.checks).some(function (x) { return x && x.enabled !== false; });
+    h += (!any && saved.checks_none_ok !== true)
+      ? '<div class="empty" style="text-align:left">Nothing to run yet. Add a step and save first.</div>'
+      : '<div class="small mute">Not run yet.</div>';
+  }
+  if (app.preflightMsg) h += '<div class="msg err" role="alert">' + esc(app.preflightMsg) + '</div>';
+  if (isDirty()) h += '<div class="small" style="color:var(--warn-ink)">Test on main uses the saved settings. Save your changes first to test them.</div>';
+  return h + '</div>';
+}
+function renderPreflight() {
+  var el = $('sec-test');
+  if (!el) return;
+  var a = document.activeElement, id = a && el.contains(a) ? a.id : null;
+  el.innerHTML = preflightHTML();
+  if (id && $(id) && !$(id).disabled) $(id).focus();
+  else if (id === 'btn-preflight') { var hh = $('h-test'); if (hh) hh.focus(); }
+}
+function loadPreflight() {
+  api('GET', '/api/preflight').then(function (r) {
+    if (r.ok && r.data) {
+      app.preflight = r.data;
+      renderPreflight();
+      if (r.data.status === 'running') startPreflightPoll();
+    }
+  });
+}
+function runPreflight() {
+  app.preflightMsg = null;
+  var btn = $('btn-preflight');
+  if (btn) btn.disabled = true;
+  api('POST', '/api/preflight').then(function (r) {
+    if (r.ok || r.status === 202) {
+      app.preflight = { status: 'running', result: app.preflight ? app.preflight.result : (app.state ? app.state.preflight : null) };
+      renderPreflight();
+      startPreflightPoll();
+    } else {
+      app.preflightMsg = r.status === 409 ? errText(r, 'Test on main is already running') : errText(r, 'Test on main did not start');
+      renderPreflight();
+    }
+  });
+}
+function startPreflightPoll() {
+  if (app.preflightTimer) return;
+  app.preflightTimer = setInterval(function () {
+    api('GET', '/api/preflight').then(function (r) {
+      if (!(r.ok && r.data)) return;
+      app.preflight = r.data;
+      if (r.data.status !== 'running') {
+        stopPreflightPoll();
+        if (app.state) app.state.preflight = r.data.result || app.state.preflight;
+        if (r.data.result) toast('Test on main finished: ' + str(obj(r.data.result).gate || 'done'));
+        refreshState();
+      }
+      renderPreflight();
+    });
+  }, PREFLIGHT_MS);
+}
+function stopPreflightPoll() { if (app.preflightTimer) { clearInterval(app.preflightTimer); app.preflightTimer = null; } }
+
+/* --- environment --- */
+
+function envSection() {
+  var ph = '<div class="ph"><code>{JOB}</code><code>{N}</code><code>{PORT}</code><code>{DB}</code><code>{WORKTREE}</code></div>';
+  var h = intro('Job environment', 'Each job gets its own .env, database and port, so jobs running side by side never share data. Every command here is optional; a project without a database leaves them empty. Commands run in the job\'s worktree.');
+  h += '<section class="card" aria-labelledby="h-envfile"><h2 id="h-envfile">Environment file and database</h2><div class="fields">' +
+    textField('env.template', 'Environment template', 'Committed file copied into each job\'s worktree as .env. No real secrets.', { mono: true, placeholder: '.env.factory' }) +
+    textField('env.db_name', 'Database name', '<code>{project}</code> and <code>{n}</code> are replaced. Default <span class="mono">{project}_job_{n}</span>.', { mono: true, placeholder: '{project}_job_{n}' }) +
+    '</div></section>';
+  h += '<section class="card" aria-labelledby="h-envcmd"><div><h2 id="h-envcmd">Commands</h2><p class="card-sub">Leave empty to skip. They can use these placeholders, and also get them as env vars FACTORY_JOB, FACTORY_N, FACTORY_PORT, FACTORY_DB and FACTORY_WORKTREE:</p></div>' + ph +
+    '<div class="fields">' +
+    textField('env.db_create', 'Create database', 'Runs when the job starts.', { mono: true, full: true }) +
+    textField('env.migrate', 'Migrate', 'Runs against the job database after it is created.', { mono: true, full: true }) +
+    textField('env.seed', 'Seed', 'Loads test users and data into the job database.', { mono: true, full: true }) +
+    textField('env.dev_server', 'Dev server', 'Starts the app on {PORT} for the implementer, reviewers and screenshots.', { mono: true, full: true }) +
+    textField('env.db_drop', 'Drop database', 'Runs when the job is merged or rejected.', { mono: true, full: true }) +
+    '</div></section>';
+  h += '<section class="card" aria-labelledby="h-envlogin"><h2 id="h-envlogin">Sign-in and hosts</h2><div class="fields">' +
+    textField('env.login_path', 'Dev login path', 'Optional dev-only login URL, e.g. <span class="mono">/dev-login?as={ROLE}</span>. When empty, screenshots sign in with factory/seed-users.json.', { mono: true, placeholder: '/dev-login?as={ROLE}' }) +
+    textField('env.local_hosts', 'Local hosts', 'Comma-separated. The gate refuses a job whose .env points at any other host.', { mono: true, type: 'list', placeholder: 'localhost, 127.0.0.1, ::1' }) +
+    '</div></section>';
+  h += '<section class="card" aria-labelledby="h-ports"><div><h2 id="h-ports">Ports</h2><p class="card-sub">Job n gets base + step × n; reviewers use the next few ports after the implementer\'s.</p></div><div class="fields">' +
+    textField('ports.base', 'Base port', '', { input: 'number', type: 'int', min: 1, max: 65535, step: 1 }) +
+    textField('ports.step', 'Step per job', '', { input: 'number', type: 'int', min: 4, step: 1 }) +
+    '</div><div class="small mute" id="port-preview">' + esc(portPreview()) + '</div></section>';
+  return h;
+}
+function portPreview() {
+  var b = num(getPath(app.draft, 'ports.base')), s = num(getPath(app.draft, 'ports.step'));
+  if (b === null || s === null) return 'Set both numbers to see an example.';
+  return 'Example: job 045\'s implementer gets port ' + b + ' + ' + s + ' × 45 = ' + (b + s * 45) + '.';
+}
+
+/* --- routing --- */
+
+function routingSection() {
+  var c = app.draft, models = obj(c.models), routing = obj(c.routing), sr = obj(c.surface_reviewers);
+  var ah = arr(c.always_human_surfaces);
+  var h = intro('Reviewers and routing', 'Intake rates every accepted issue\'s risk and the areas it touches. These tables decide which reviewers run, on which model, and whether the factory may merge on its own.');
+
+  h += '<section aria-labelledby="h-agents" class="card"><h2 id="h-agents">Main agents</h2><div class="fields">' +
+    MAIN_AGENTS.map(function (a) {
+      var p = 'models.' + a.key;
+      return '<div class="fld"><label class="lbl" for="' + fieldId(p) + '">' + esc(a.label) + '</label>' + modelSelect(p, models[a.key]) +
+        (a.help ? '<span class="help">' + esc(a.help) + '</span>' : '') + '</div>';
+    }).join('') + '</div></section>';
+
+  var jobs = jobsList();
+  var risks = uniq(RISKS.concat(Object.keys(routing)));
+  h += '<section aria-labelledby="h-risk" class="card"><div><h2 id="h-risk">By risk</h2><p class="card-sub">Every job gets a code reviewer. Auto-merge lets the approver merge without you.</p></div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:640px"><thead><tr><th scope="col">Risk</th><th scope="col">Code reviewer</th><th scope="col">Auto-merge</th><th scope="col">So far</th></tr></thead><tbody>' +
+    risks.map(function (r) {
+      var row = obj(routing[r]), p = 'routing.' + r + '.';
+      var am = row.auto_merge === true, amId = fieldId(p + 'auto_merge');
+      var amCell;
+      if (r === 'high' && !am) {
+        amCell = '<label class="inline mute"><input type="checkbox" id="' + amId + '" disabled aria-describedby="' + amId + '-n">Never</label><div class="help" id="' + amId + '-n">High-risk jobs always go to you.</div>';
+      } else {
+        amCell = '<label class="inline"><input type="checkbox" id="' + amId + '" data-bind="' + p + 'auto_merge" data-type="bool"' + (am ? ' checked' : '') + '>' + (am ? 'On' : 'Off') + '</label>' +
+          (r === 'high' ? '<div class="warn-text">On in config.json. Untick to turn it off; the dashboard can\'t turn it back on.</div>' : '');
+      }
+      var done = jobs.filter(function (j) { return riskOf(j) === r; });
+      var m = done.filter(function (j) { return j.stage === 'merged'; }).length, rj = done.filter(function (j) { return j.stage === 'rejected'; }).length;
+      return '<tr><td>' + chip(r, RISK_CLS[r] || 'pend') + '</td><td>' + modelSelect(p + 'code', row.code, 'Code reviewer for ' + r + ' risk') + '</td><td>' + amCell + '</td>' +
+        '<td class="small mute">' + (m || rj ? esc(m + ' merged, ' + rj + ' rejected') : 'No finished jobs yet') + '</td></tr>';
+    }).join('') + '</tbody></table></div></section>';
+
+  var surfaces = uniq(SURFACES.concat(Object.keys(sr)));
+  h += '<section aria-labelledby="h-surf" class="card"><div><h2 id="h-surf">By area touched</h2><p class="card-sub">Extra reviewers that join when intake flags an area. Ticked areas always go to you before merging, whatever the risk.</p></div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:760px"><thead><tr><th scope="col">Area</th><th scope="col">When intake flags it</th><th scope="col">Reviewers added</th><th scope="col">Always goes to you</th></tr></thead><tbody>' +
+    surfaces.map(function (s) {
+      var revs = obj(sr[s]), rk = Object.keys(revs);
+      var checked = ah.indexOf(s) >= 0, rec = RECOMMENDED_HUMAN.indexOf(s) >= 0, id = 'f-ah-' + idSafe(s);
+      var revCell = rk.length ? rk.map(function (r) {
+        var p = 'surface_reviewers.' + s + '.' + r;
+        return '<div class="rev"><span>' + esc(revLabel(r)) + '</span>' + modelSelect(p, revs[r], revLabel(r) + ' reviewer model for ' + s) + '</div>';
+      }).join('') + (s === 'ui' ? '<div class="help">Signed in as seeded users</div>' : '') : '<span class="mute small">None</span>';
+      return '<tr><td>' + chip(s, 'info') + '</td><td class="small" style="color:var(--ink2);min-width:180px">' + esc(SURFACE_DESC[s] || '') + '</td><td>' + revCell + '</td>' +
+        '<td style="min-width:200px"><div class="row wrapflex" style="gap:8px"><label class="inline"><input type="checkbox" id="' + id + '" data-bind="always_human_surfaces" data-type="member" data-member="' + esc(s) + '"' + (checked ? ' checked' : '') + (rec && !checked ? ' aria-describedby="' + id + '-w"' : '') + '><span class="visually-hidden">' + esc(s) + ' always goes to you</span><span aria-hidden="true">Always</span></label>' +
+        (rec ? chip('Recommended', 'warn') : '') + '</div>' +
+        (rec && !checked ? '<div class="warn-text" id="' + id + '-w">Not recommended: jobs touching ' + esc(s) + ' can merge without you when auto-merge is on for their risk.</div>' : '') +
+        '</td></tr>';
+    }).join('') + '</tbody></table></div></section>';
+  return h;
+}
+
+/* --- agent tools (runner) --- */
+
+var DEFAULT_RUNNER = {
+  harness: 'claude',
+  role_harness: {},
+  agent_timeout_minutes: 60,
+  harnesses: {
+    claude: { cmd: 'claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools "{TOOLS}" --output-format json', prompt: 'stdin', output: 'claude-json', model_flag: '--model {MODEL}', models: { fable: 'fable', opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' }, verified: true },
+    codex: { cmd: 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check "Read the file {PROMPT_FILE} and follow its instructions exactly."', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false },
+    deepseek: { cmd: 'deepseek exec {MODEL_FLAG} "Read the file {PROMPT_FILE} and follow its instructions exactly."', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false }
+  }
+};
+var RUNNER_ROLES = ['intake', 'spec-writer', 'implementer', 'approver', 'reviewer-code', 'reviewer-security', 'reviewer-ux', 'reviewer-ui', 'reviewer-data', 'reviewer-access'];
+var HARNESS_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,30}$/;
+var PLACEHOLDER_HELP = 'Placeholders: <span class="ph" style="display:inline-flex"><code>{MODEL_FLAG}</code><code>{MODEL}</code><code>{TOOLS}</code><code>{PROMPT_FILE}</code><code>{ROLE}</code></span>';
+
+function harnessesInUse(rn) {
+  var rh = obj(rn.role_harness);
+  return uniq([rn.harness].concat(Object.keys(rh).map(function (k) { return rh[k]; }))).filter(Boolean).map(str);
+}
+function roleLabel(role) {
+  var m = role.match(/^reviewer-(.+)$/);
+  return m ? revLabel(m[1]) + ' reviewer' : (AGENT_LABEL[role] || cap(role));
+}
+
+function runnerSection() {
+  var rn = app.draft.runner;
+  var h = intro('Agent tools', 'Which command-line tool runs each agent, and how the factory calls it.');
+  h += '<div class="note-info" role="note"><p>These settings are used by <code>python factory/bin/run.py</code>. Inside Claude Code, <code>/factory run</code> uses Claude Code\'s own subagents and ignores this section.</p>' +
+    '<p>Check a tool with <code>python factory/bin/run.py doctor</code>.</p></div>';
+  if (!rn || typeof rn !== 'object' || Array.isArray(rn)) {
+    return h + '<section class="emptystate" aria-labelledby="h-norunner"><h2 id="h-norunner">No agent tool settings yet</h2>' +
+      '<p>config.json has no <span class="mono">runner</span> block. Start from the defaults: Claude Code for every agent, with presets for Codex and DeepSeek.</p>' +
+      '<button type="button" class="btn btn-primary" data-action="setup-runner">Use the default agent tools</button></section>';
+  }
+  var hs = obj(rn.harnesses), names = Object.keys(hs), rh = obj(rn.role_harness), inUse = harnessesInUse(rn);
+  var nameOpts = names.map(function (n) { return { v: n, t: n }; });
+  var def = str(rn.harness);
+
+  h += '<section aria-labelledby="h-which" class="card"><h2 id="h-which">Which tool runs the agents</h2><div class="fields">' +
+    '<div class="fld"><label class="lbl" for="' + fieldId('runner.harness') + '">Default tool</label>' +
+    selectHTML(fieldId('runner.harness'), 'runner.harness', def, nameOpts, ' data-rerender="1" aria-describedby="' + fieldId('runner.harness') + '-h"') +
+    '<span class="help" id="' + fieldId('runner.harness') + '-h">Runs every agent that has no tool of its own below.</span></div>' +
+    textField('runner.agent_timeout_minutes', 'Agent timeout (minutes)', '1 to 480. An agent still running after this is stopped.', { input: 'number', type: 'int', min: 1, max: 480, step: 1 }) +
+    '</div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:420px"><caption class="visually-hidden">Tool per agent</caption><thead><tr><th scope="col">Agent</th><th scope="col">Tool</th></tr></thead><tbody>' +
+    RUNNER_ROLES.map(function (role) {
+      var p = 'runner.role_harness.' + role;
+      return '<tr><td>' + esc(roleLabel(role)) + ' <span class="mono small mute">' + esc(role) + '</span></td><td>' +
+        selectHTML(fieldId(p), p, rh[role] === undefined ? '' : rh[role], [{ v: '', t: 'Default (' + (def || 'not set') + ')' }].concat(nameOpts),
+          ' data-rerender="1" aria-label="Tool for the ' + esc(roleLabel(role)) + '"', 'opt') + '</td></tr>';
+    }).join('') + '</tbody></table></div></section>';
+
+  h += '<div class="row wrapflex" style="gap:8px"><h2 style="font-size:18px;flex:1 1 auto">Tools <span style="font-weight:500;color:var(--mute);font-size:14px">· ' + names.length + '</span></h2>' +
+    '<button type="button" class="btn btn-primary" id="btn-add-harness" data-action="add-harness">+ Add agent tool</button></div>';
+  if (!names.length) h += '<div class="empty">No agent tools. Add one; the runner needs at least one.</div>';
+  h += names.map(function (n) { return harnessCard(n, obj(hs[n]), inUse.indexOf(n) >= 0); }).join('');
+  return h;
+}
+
+function harnessCard(name, hc, used) {
+  var p = 'runner.harnesses.' + name + '.', hid = 'h-hn-' + idSafe(name), models = obj(hc.models);
+  var promptWarn = hc.prompt === 'file' && str(hc.cmd).trim() && str(hc.cmd).indexOf('{PROMPT_FILE}') < 0;
+  var rm = used
+    ? '<button type="button" class="btn" disabled title="In use: pick another tool for every agent that uses it first" aria-label="Remove ' + esc(name) + ' (in use, cannot be removed)">Remove</button>'
+    : '<button type="button" class="btn btn-danger" id="rmh-' + idSafe(name) + '" data-action="remove-harness" data-name="' + esc(name) + '" aria-label="Remove agent tool ' + esc(name) + '">Remove</button>';
+  return '<section class="card" aria-labelledby="' + hid + '">' +
+    '<div class="row wrapflex" style="gap:8px"><h2 id="' + hid + '" class="mono">' + esc(name) + '</h2>' +
+    (hc.verified === true ? chip('verified', 'pass') : chip('preset: check its --help', 'warn')) +
+    (used ? chip('in use', 'info') : '') + '<span class="grow"></span>' + rm + '</div>' +
+    '<div class="fields">' +
+    textField(p + 'cmd', 'Command', PLACEHOLDER_HELP, { mono: true, full: true, srPrefix: name }) +
+    (promptWarn ? '<div class="warn-text fld full" role="note">The prompt is passed as a file, so the command must use {PROMPT_FILE}.</div>' : '') +
+    '<div class="fld"><label class="lbl" for="' + fieldId(p + 'prompt') + '"><span class="visually-hidden">' + esc(name) + ' </span>Prompt passed by</label>' +
+    selectHTML(fieldId(p + 'prompt'), p + 'prompt', hc.prompt, [{ v: 'stdin', t: 'stdin' }, { v: 'file', t: 'a file the command names ({PROMPT_FILE})' }], ' data-rerender="1"') + '</div>' +
+    '<div class="fld"><label class="lbl" for="' + fieldId(p + 'output') + '"><span class="visually-hidden">' + esc(name) + ' </span>Output</label>' +
+    selectHTML(fieldId(p + 'output'), p + 'output', hc.output, [{ v: 'text', t: 'text' }, { v: 'claude-json', t: 'claude-json' }], ' aria-describedby="' + fieldId(p + 'output') + '-h"') +
+    '<span class="help" id="' + fieldId(p + 'output') + '-h">claude-json: Claude Code\'s --output-format json, lets the runner record cost.</span></div>' +
+    textField(p + 'model_flag', 'Model flag', 'Uses {MODEL}; leave empty to never pass a model.', { mono: true, srPrefix: name, placeholder: '--model {MODEL}' }) +
+    '</div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:360px"><caption class="visually-hidden">' + esc(name) + ' model per tier</caption><thead><tr><th scope="col">Tier</th><th scope="col">Model name for this tool</th></tr></thead><tbody>' +
+    MODELS.map(function (t) {
+      var mp = p + 'models.' + t, v = models[t];
+      return '<tr><td>' + esc(cap(t)) + '</td><td><input class="field mono" style="width:100%" type="text" id="' + fieldId(mp) + '" data-bind="' + esc(mp) + '" data-type="opt" value="' + esc(v === undefined || v === null ? '' : v) + '" placeholder="the tool\'s default model" aria-label="' + esc(name) + ' model for the ' + esc(t) + ' tier" spellcheck="false" autocomplete="off"></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<p class="help" style="margin:0">Empty = the tool\'s default model.</p>' +
+    '<div class="switch-row"><input type="checkbox" id="' + fieldId(p + 'verified') + '" data-bind="' + esc(p + 'verified') + '" data-type="bool"' + (hc.verified === true ? ' checked' : '') + '>' +
+    '<label for="' + fieldId(p + 'verified') + '">I checked this command against the tool\'s --help</label></div>' +
+    '</section>';
+}
+
+function addHarness() {
+  var rn = app.draft.runner;
+  if (!rn || typeof rn !== 'object') return;
+  if (!rn.harnesses || typeof rn.harnesses !== 'object' || Array.isArray(rn.harnesses)) rn.harnesses = {};
+  var name = window.prompt('Name for the new agent tool (lower-case letters, digits, - or _):', '');
+  if (name === null) return;
+  name = name.trim();
+  if (!HARNESS_NAME_RE.test(name)) { toast('Use lower-case letters, digits, - or _ (up to 31 characters), starting with a letter or digit.'); return; }
+  if (Object.prototype.hasOwnProperty.call(rn.harnesses, name)) { toast('There is already an agent tool called ' + name + '.'); return; }
+  rn.harnesses[name] = { cmd: '', prompt: 'file', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false };
+  rerenderSection();
+  var f = $(fieldId('runner.harnesses.' + name + '.cmd'));
+  if (f) f.focus();
+}
+function removeHarness(name) {
+  var rn = app.draft.runner;
+  if (!rn || !rn.harnesses || !Object.prototype.hasOwnProperty.call(rn.harnesses, name)) return;
+  if (harnessesInUse(rn).indexOf(name) >= 0) return;
+  if (!window.confirm('Remove the agent tool "' + name + '"? Nothing is saved until you press Save settings.')) return;
+  delete rn.harnesses[name];
+  rerenderSection();
+  var b = $('btn-add-harness'); if (b) b.focus();
+}
+
+/* --- limits --- */
+
+function limitsSection() {
+  var c = app.draft, db = obj(c.diff_budget);
+  var conc = c.concurrency === undefined || c.concurrency === null ? 1 : c.concurrency;
+  var h = intro('Limits and budgets', 'When a job hits a limit it stops and goes to you with the reason.');
+  h += '<section aria-labelledby="h-lim" class="card"><h2 id="h-lim">Jobs, rounds and cost</h2><div class="fields">' +
+    '<div class="fld"><label class="lbl" for="f-concurrency">Jobs at once</label>' +
+    selectHTML('f-concurrency', 'concurrency', conc, [1, 2, 3].map(function (x) { return { v: x, t: String(x) }; }), ' aria-describedby="f-concurrency-h"', 'int') +
+    '<span class="help" id="f-concurrency-h">Up to 3: each job holds its own database, server and browser.</span></div>' +
+    textField('max_rounds', 'Rounds per job', 'Implement → gate → review passes before asking you. 1 to 5.', { input: 'number', type: 'int', min: 1, max: 5, step: 1 }) +
+    moneyField('cost_caps_usd.job', 'Cost cap per job', 'API-equivalent price. Empty means no cap.') +
+    moneyField('cost_caps_usd.run', 'Cost cap per run', 'Stops starting new jobs. Empty means no cap.') +
+    '</div><p class="small mute" style="margin:0">Prices per model come from <span class="mono">prices_usd_per_mtok</span> in config.json; a model without a price makes cost show as partial.</p></section>';
+  var risks = uniq(RISKS.concat(Object.keys(db)));
+  h += '<section aria-labelledby="h-budget" class="card"><div><h2 id="h-budget">Diff budget</h2><p class="card-sub">The gate fails a job whose diff is bigger than this for its risk, and asks to split it.</p></div>' +
+    '<div class="tblbox"><table class="tbl" style="min-width:480px"><thead><tr><th scope="col">Risk</th><th scope="col">Max lines changed</th><th scope="col">Max files changed</th></tr></thead><tbody>' +
+    risks.map(function (r) {
+      var row = obj(db[r]), p = 'diff_budget.' + r + '.';
+      return '<tr><td>' + chip(r, RISK_CLS[r] || 'pend') + '</td>' +
+        '<td><input class="field" style="width:120px" type="number" min="1" step="1" id="' + fieldId(p + 'lines') + '" data-bind="' + p + 'lines" data-type="int" value="' + esc(row.lines === null || row.lines === undefined ? '' : row.lines) + '" aria-label="Max lines for ' + esc(r) + ' risk"></td>' +
+        '<td><input class="field" style="width:100px" type="number" min="1" step="1" id="' + fieldId(p + 'files') + '" data-bind="' + p + 'files" data-type="int" value="' + esc(row.files === null || row.files === undefined ? '' : row.files) + '" aria-label="Max files for ' + esc(r) + ' risk"></td></tr>';
+    }).join('') + '</tbody></table></div></section>';
+  return h;
+}
+function moneyField(path, label, help) {
+  var v = getPath(app.draft, path), id = fieldId(path);
+  return '<div class="fld"><label class="lbl" for="' + id + '">' + esc(label) + '</label>' +
+    '<div class="money"><span class="mute" aria-hidden="true">$</span><input id="' + id + '" class="field" style="flex:1 1 auto" type="number" min="0" step="0.01" data-bind="' + esc(path) + '" data-type="money" value="' + esc(v === null || v === undefined ? '' : v) + '" placeholder="No cap" aria-describedby="' + id + '-h"></div>' +
+    '<span class="help" id="' + id + '-h">' + esc(help) + '</span></div>';
+}
+
+/* --- protected paths --- */
+
+function protectedSection() {
+  var pp = arr(app.draft.protected_paths);
+  var h = intro('Protected paths', 'A job fails the gate if it changes or deletes an existing file matching one of these globs. Adding new files is fine. The factory\'s own files are locked in.');
+  h += '<section aria-labelledby="h-pp" class="card"><div class="row wrapflex" style="gap:8px"><h2 id="h-pp" style="flex:1 1 auto">Paths <span style="font-weight:500;color:var(--mute)">· ' + pp.length + '</span></h2>' +
+    '<button type="button" class="btn btn-primary" id="btn-add-path" data-action="add-path">+ Add path</button></div><ul class="pp">' +
+    pp.map(function (p, i) {
+      var locked = LOCKED_PATHS.indexOf(p) >= 0, id = fieldId('protected_paths.' + i);
+      if (locked) {
+        return '<li><input class="field mono" id="' + id + '" type="text" value="' + esc(p) + '" readonly aria-label="Protected path ' + (i + 1) + ', locked">' +
+          chip('Locked', 'pend') + '<span class="small mute">The factory\'s own files</span></li>';
+      }
+      return '<li><input class="field mono" id="' + id + '" type="text" data-bind="protected_paths.' + i + '" data-type="str" value="' + esc(p) + '" aria-label="Protected path ' + (i + 1) + '" placeholder="e.g. migrations/*" spellcheck="false" autocomplete="off">' +
+        '<button type="button" class="icon-btn" id="rmp-' + i + '" data-action="remove-path" data-i="' + i + '" aria-label="Remove ' + esc(p || 'empty path') + '">✕</button></li>';
+    }).join('') + '</ul>';
+  var missing = LOCKED_PATHS.filter(function (p) { return pp.indexOf(p) < 0; });
+  if (missing.length) {
+    h += '<div class="warn-text" role="note">Missing locked paths: ' + esc(missing.join(', ')) + '. Saving is refused without them. ' +
+      '<button type="button" class="linkbtn" data-action="restore-locked">Add them back</button></div>';
+  }
+  h += '<p class="small mute" style="margin:0">Globs are relative to the repo root, e.g. <span class="mono">.github/workflows/*</span> or <span class="mono">migrations/*</span>.</p></section>';
+  return h;
+}
+
+/* --- run control --- */
+
+function runSection() {
+  var c = app.draft, paused = !!(app.state && app.state.paused);
+  var h = intro('Run control', '');
+  h += '<section aria-labelledby="h-pause-s" class="card"><h2 id="h-pause-s">Pause</h2>' +
+    '<div class="switch-row"><input type="checkbox" id="f-paused" data-action="toggle-pause"' + (paused ? ' checked' : '') + (app.pauseBusy ? ' disabled' : '') + ' aria-describedby="f-paused-h">' +
+    '<label for="f-paused">Pause the factory</label></div>' +
+    '<p class="small mute" style="margin:0" id="f-paused-h">Creates <span class="mono">factory/PAUSE</span>; the factory picks up no new work while it exists. This applies right away and is not part of Save settings.</p></section>';
+  h += '<section aria-labelledby="h-git" class="card"><h2 id="h-git">Git and shell</h2><div class="fields">' +
+    textField('base_branch', 'Base branch', 'Jobs branch from origin/&lt;base&gt; and merge back into it.', { mono: true, placeholder: 'main' }) +
+    '<div class="fld"><label class="lbl" for="f-merge_method">Merge method</label>' +
+    selectHTML('f-merge_method', 'merge_method', c.merge_method, [{ v: 'merge', t: 'Merge commit' }, { v: 'squash', t: 'Squash' }, { v: 'rebase', t: 'Rebase' }]) +
+    '<span class="help">How the factory merges a PR (gh pr merge).</span></div>' +
+    '<div class="fld"><label class="lbl" for="f-shell">Shell for commands</label>' +
+    selectHTML('f-shell', 'shell', c.shell, [{ v: 'system', t: 'System (cmd.exe on Windows, sh elsewhere)' }, { v: 'bash', t: 'bash' }, { v: 'powershell', t: 'PowerShell' }]) +
+    '<span class="help">Runs check steps and environment commands.</span></div>' +
+    '</div></section>';
+  return h;
+}
+
+/* --- history --- */
+
+function historySection() {
+  var h = intro('Settings history', 'Every save keeps the previous settings in <span class="mono">factory/config-history/</span>. To go back to one, copy it over factory/config.json.');
+  h += '<section aria-labelledby="h-hist" class="card"><div class="row wrapflex" style="gap:8px"><h2 id="h-hist" style="flex:1 1 auto">Previous versions</h2>' +
+    '<button type="button" class="btn" data-action="show-diff">Show uncommitted diff</button></div>';
+  if (app.historyErr) h += '<div class="msg err" role="alert">' + esc(app.historyErr) + '</div>';
+  else if (app.history === null) h += '<p class="mute" role="status" style="margin:0">Loading…</p>';
+  else if (!app.history.length) h += '<div class="empty">No earlier versions yet. One is kept each time you save.</div>';
+  else {
+    var list = app.history.slice().sort(function (a, b) { return (toMs(b.at) || 0) - (toMs(a.at) || 0); });
+    h += '<div class="tblbox"><table class="tbl" style="min-width:420px"><thead><tr><th scope="col">Saved</th><th scope="col">File</th></tr></thead><tbody>' +
+      list.map(function (e) { return '<tr><td class="nowrap">' + esc(fmtWhen(e.at)) + '</td><td class="mono small">' + esc(e.name) + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+  }
+  return h + '</section>';
+}
+function loadHistory() {
+  app.history = null; app.historyErr = null;
+  api('GET', '/api/config/history').then(function (r) {
+    if (r.ok && r.data) app.history = arr(r.data.entries).filter(function (e) { return e && typeof e === 'object'; });
+    else app.historyErr = errText(r, 'Could not load the history');
+    if (app.route.name === 'settings' && app.route.section === 'history') rerenderSection();
+  });
+}
+
+/* --- save bar --- */
+
+function savebarHTML() {
+  return '<div class="savebar" id="savebar" role="region" aria-label="Save settings"><span class="savebar-note" id="savebar-note"></span>' +
+    '<button type="button" class="btn" id="btn-discard" data-action="discard">Discard</button>' +
+    '<button type="button" class="btn btn-primary" id="btn-save" data-action="save">Save settings</button></div>';
+}
+function updateSavebar() {
+  var note = $('savebar-note');
+  if (!note) return;
+  var dirty = isDirty();
+  note.innerHTML = dirty
+    ? chip('Unsaved changes', 'warn') + '<span>Saving only writes settings. No command runs until a job\'s gate or Test on main. Settings can\'t be saved while a job is in the gate or merging.</span>'
+    : '<span>All changes saved. Every save is kept in Settings history.</span>';
+  $('btn-save').disabled = !dirty || app.saving;
+  $('btn-save').textContent = app.saving ? 'Saving…' : 'Save settings';
+  $('btn-discard').disabled = !dirty || app.saving;
+}
+function renderSaveErrors(focus) {
+  var el = $('save-errors');
+  if (!el) return;
+  if (!app.saveErrors.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="errors" role="alert" tabindex="-1" id="errbox"><strong>Settings not saved</strong><ul>' +
+    app.saveErrors.map(function (e) { return '<li>' + esc(e) + '</li>'; }).join('') + '</ul></div>';
+  if (focus) $('errbox').focus();
+}
+function rerenderSection() {
+  var body = $('sec-body');
+  if (!body) { if (app.route.name === 'settings') renderView(); return; }
+  var a = document.activeElement, id = a && a.id;
+  body.innerHTML = sectionHTML(app.route.section);
+  if (id && $(id) && a !== $(id)) $(id).focus({ preventScroll: true });
+  if (app.route.section === 'checks') renderPreflight();
+  updateSavebar();
+  renderSaveErrors();
+  updateHeader();
+}
+function afterEdit() { updateSavebar(); updateHeader(); }
+
+function saveSettings() {
+  if (app.saving || !isDirty()) return;
+  app.saving = true;
+  app.saveErrors = [];
+  updateSavebar();
+  renderSaveErrors();
+  api('POST', '/api/config', { config: app.draft }).then(function (r) {
+    app.saving = false;
+    if (r.ok) {
+      var cfg = r.data && r.data.config && typeof r.data.config === 'object' ? r.data.config : clone(app.draft);
+      if (app.state) { app.state.config = clone(cfg); app.state.config_dirty = true; }
+      app.draft = clone(cfg);
+      app.baseJson = JSON.stringify(cfg);
+      toast('Settings saved.');
+      rerenderSection();
+      var b = $('cfg-banner'); if (b) b.innerHTML = configBannerHTML();
+      if (app.route.section === 'history') loadHistory();
+      refreshState();
+      return;
+    }
+    if (r.status === 400) {
+      app.saveErrors = arr(r.data && r.data.errors).map(str);
+      if (!app.saveErrors.length) app.saveErrors = [errText(r, 'The settings are not valid')];
+    } else if (r.status === 409) {
+      app.saveErrors = ['A job is in the gate or merging; try again in a moment.'];
+    } else if (r.status === 401 || r.status === 403) {
+      return;
+    } else {
+      app.saveErrors = [errText(r, 'Saving failed')];
+    }
+    updateSavebar();
+    renderSaveErrors(true);
+  });
+}
+
+function discardSettings() {
+  if (!isDirty()) return;
+  if (!window.confirm('Discard your unsaved settings changes?')) return;
+  resetDraft();
+  app.saveErrors = [];
+  rerenderSection();
+  toast('Changes discarded.');
+}
+
+function applyBind(el) {
+  if (!app.draft) return;
+  var path = el.getAttribute('data-bind'), t = el.getAttribute('data-type') || 'str', v, s;
+  switch (t) {
+    case 'bool': v = !!el.checked; break;
+    case 'int':
+      s = str(el.value).trim();
+      v = s === '' ? null : Number(s);
+      if (v !== null && !isFinite(v)) v = null;
+      if (el.tagName === 'INPUT') { if (v === null || !Number.isInteger(v)) el.setAttribute('aria-invalid', 'true'); else el.removeAttribute('aria-invalid'); }
+      break;
+    case 'money':
+      s = str(el.value).trim();
+      v = s === '' ? null : Number(s);
+      if (v !== null && (!isFinite(v) || v < 0)) { el.setAttribute('aria-invalid', 'true'); v = null; } else el.removeAttribute('aria-invalid');
+      break;
+    case 'list': v = str(el.value).split(',').map(function (x) { return x.trim(); }).filter(Boolean); break;
+    case 'member':
+      var cur = arr(getPath(app.draft, path)).slice(), m = el.getAttribute('data-member');
+      if (el.checked && cur.indexOf(m) < 0) cur.push(m);
+      if (!el.checked) cur = cur.filter(function (x) { return x !== m; });
+      var order = uniq(SURFACES.concat(cur));
+      v = order.filter(function (x) { return cur.indexOf(x) >= 0; });
+      break;
+    case 'opt': /* empty value removes the key (e.g. role_harness "Default", empty model name) */
+      v = str(el.value).trim();
+      if (v === '') { delPath(app.draft, path); afterEdit(); return; }
+      break;
+    default: v = el.value;
+  }
+  setPath(app.draft, path, v);
+  if (path.indexOf('ports.') === 0 && $('port-preview')) $('port-preview').textContent = portPreview();
+  afterEdit();
+}
+
+/* ------------------------------------------------------------------ actions */
+
+function onAction(action, el, ev) {
+  var i = parseInt(el.getAttribute('data-i'), 10);
+  switch (action) {
+    case 'toggle-pause': togglePause(); break;
+    case 'goto-test':
+      app.focusTest = true;
+      if (app.route.name === 'settings' && app.route.section === 'checks') { ev.preventDefault(); focusTestCard(); }
+      break;
+    case 'show-diff': showDiff(); break;
+    case 'close-modal': closeModal(); break;
+    case 'open-file': openFile(el.getAttribute('data-path')); break;
+    case 'send-feedback': sendFeedback(); break;
+    case 'show-reject':
+      $('reject-form').hidden = false; el.setAttribute('aria-expanded', 'true'); el.hidden = true; $('rj-text').focus(); break;
+    case 'cancel-reject':
+      $('reject-form').hidden = true; var sr = $('btn-show-reject'); sr.hidden = false; sr.setAttribute('aria-expanded', 'false'); sr.focus(); setDecideMsg(''); break;
+    case 'confirm-reject': rejectJob(); break;
+    case 'save': saveSettings(); break;
+    case 'discard': discardSettings(); break;
+    case 'run-preflight': runPreflight(); break;
+    case 'add-check':
+      if (!Array.isArray(app.draft.checks)) app.draft.checks = [];
+      app.draft.checks.push({ name: '', cmd: '', enabled: true, timeout: 300, retry_on_fail: 0 });
+      rerenderSection();
+      var nf = $(fieldId('checks.' + (app.draft.checks.length - 1) + '.name'));
+      if (nf) nf.focus();
+      break;
+    case 'remove-check':
+      app.draft.checks.splice(i, 1);
+      rerenderSection();
+      var nx = $('rm-' + Math.min(i, app.draft.checks.length - 1)) || $('btn-add-check');
+      if (nx) nx.focus();
+      break;
+    case 'move-check':
+      var dir = parseInt(el.getAttribute('data-dir'), 10), j = i + dir, ch = app.draft.checks;
+      if (j < 0 || j >= ch.length) break;
+      var tmp = ch[i]; ch[i] = ch[j]; ch[j] = tmp;
+      rerenderSection();
+      var mb = $('mv-' + j + '-' + (dir < 0 ? 'up' : 'down'));
+      if (mb && mb.disabled) mb = $('mv-' + j + '-' + (dir < 0 ? 'down' : 'up'));
+      if (mb) mb.focus();
+      break;
+    case 'add-path':
+      if (!Array.isArray(app.draft.protected_paths)) app.draft.protected_paths = [];
+      app.draft.protected_paths.push('');
+      rerenderSection();
+      var pf = $(fieldId('protected_paths.' + (app.draft.protected_paths.length - 1)));
+      if (pf) pf.focus();
+      break;
+    case 'remove-path':
+      app.draft.protected_paths.splice(i, 1);
+      rerenderSection();
+      var bp = $('btn-add-path'); if (bp) bp.focus();
+      break;
+    case 'restore-locked':
+      if (!Array.isArray(app.draft.protected_paths)) app.draft.protected_paths = [];
+      LOCKED_PATHS.slice().reverse().forEach(function (p) { if (app.draft.protected_paths.indexOf(p) < 0) app.draft.protected_paths.unshift(p); });
+      rerenderSection();
+      var ap = $('btn-add-path'); if (ap) ap.focus();
+      break;
+    case 'add-harness': addHarness(); break;
+    case 'remove-harness': removeHarness(el.getAttribute('data-name')); break;
+    case 'setup-runner':
+      app.draft.runner = clone(DEFAULT_RUNNER);
+      rerenderSection();
+      var dh = $(fieldId('runner.harness')); if (dh) dh.focus();
+      break;
+  }
+}
+
+function togglePause() {
+  if (app.pauseBusy || !app.state) return;
+  var next = !app.state.paused;
+  app.pauseBusy = true;
+  updateHeader();
+  var cb = $('f-paused'); if (cb) cb.disabled = true;
+  api('POST', '/api/pause', { paused: next }).then(function (r) {
+    app.pauseBusy = false;
+    if (r.ok && r.data && app.state) {
+      app.state.paused = typeof r.data.paused === 'boolean' ? r.data.paused : next;
+      toast(app.state.paused ? 'Factory paused.' : 'Factory resumed.');
+    } else if (r.status !== 401 && r.status !== 403) {
+      toast(errText(r, 'Could not change pause'));
+    }
+    updateHeader();
+    syncPauseBox();
+    refreshState();
+  });
+}
+function syncPauseBox() {
+  var cb = $('f-paused');
+  if (!cb) return;
+  cb.checked = !!(app.state && app.state.paused);
+  cb.disabled = app.pauseBusy;
+}
+
+function focusTestCard() {
+  app.focusTest = false;
+  var c = $('sec-test');
+  if (!c) return;
+  c.scrollIntoView({ block: 'start' });
+  var hh = $('h-test'); if (hh) hh.focus({ preventScroll: true });
+}
+
+/* ------------------------------------------------------------------ routing + polling */
+
+function parseRoute() {
+  var h = (window.location.hash || '').replace(/^#\/?/, '');
+  var parts = h.split('/').filter(Boolean).map(function (p) { try { return decodeURIComponent(p); } catch (e) { return p; } });
+  if (parts[0] === 'jobs' && parts[1]) return { name: 'job', id: parts[1] };
+  if (parts[0] === 'settings') {
+    var ok = SECTIONS.some(function (s) { return s.key === parts[1]; });
+    return { name: 'settings', section: ok ? parts[1] : 'checks' };
+  }
+  return { name: 'board' };
+}
+
+function onRoute() {
+  if (/(?:^#|[&#?])token=/.test(window.location.hash)) {
+    readTokenFromHash();
+    app.state = null;
+    renderAll();
+    refreshState();
+  }
+  var prev = app.route, rt = parseRoute();
+  app.route = rt;
+  if (rt.name === 'settings') app.lastSection = rt.section;
+  if (app.authFailed || (!app.token && !app.fixture)) { renderAll(); return; }
+  var changed = prev.name !== rt.name || prev.id !== rt.id || prev.section !== rt.section;
+  if (rt.name === 'job' && (prev.name !== 'job' || prev.id !== rt.id)) {
+    app.job = null; app.jobErr = null; app.decisionKey = null; app.fileCache = {}; app.fileInflight = {};
+    loadJob(rt.id);
+  }
+  if (rt.name === 'settings' && rt.section === 'history' && changed) loadHistory();
+  if (rt.name === 'settings' && rt.section === 'checks' && changed && !app.preflightTimer) loadPreflight();
+  if (!$('hdr')) renderAll(); else { updateHeader(); renderView(); }
+  if (changed) {
+    if (app.focusTest && rt.name === 'settings' && rt.section === 'checks') focusTestCard();
+    else {
+      window.scrollTo(0, 0);
+      var v = $('view'); if (v) v.focus({ preventScroll: true });
+    }
+  }
+}
+
+function refreshState() {
+  if (app.pollBusy || app.authFailed || (!app.token && !app.fixture)) return Promise.resolve();
+  app.pollBusy = true;
+  return api('GET', '/api/state').then(function (r) {
+    app.pollBusy = false;
+    if (r.status === 401 || r.status === 403) return;
+    if (r.ok && r.data && typeof r.data === 'object') { app.state = r.data; app.stateErr = null; }
+    else app.stateErr = r.status === 0 ? 'Can\'t reach serve.py. Is it still running?' : errText(r, 'Could not load the factory state');
+    afterState();
+  });
+}
+
+function afterState() {
+  if (app.authFailed || !$('hdr')) return;
+  updateHeader();
+  var rt = app.route;
+  if (rt.name === 'board') { renderView(); return; }
+  if (rt.name === 'settings') {
+    if (!app.draft) { renderView(); return; }
+    if (app.state && app.state.config && typeof app.state.config === 'object') {
+      var sj = JSON.stringify(app.state.config);
+      if (!isDirty() && sj !== app.baseJson) { resetDraft(); rerenderSection(); }
+    }
+    var b = $('cfg-banner');
+    if (b) b.innerHTML = app.state && app.state.config_dirty ? configBannerHTML() : '';
+    syncPauseBox();
+    if (rt.section === 'checks' && !app.preflightTimer && app.state && app.state.preflight) {
+      var cur = app.preflight ? app.preflight.result : null;
+      if (JSON.stringify(cur || null) !== JSON.stringify(app.state.preflight)) {
+        app.preflight = { status: 'done', result: app.state.preflight };
+        renderPreflight();
+      }
+    }
+    setTitle();
+  }
+}
+
+function tick() {
+  if (document.hidden || app.authFailed || (!app.token && !app.fixture)) return;
+  if (app.route.name === 'settings' && isDirty()) return;
+  refreshState();
+  if (app.route.name === 'job') loadJob(app.route.id, true);
+}
+
+/* ------------------------------------------------------------------ events */
+
+document.addEventListener('click', function (ev) {
+  var t = ev.target;
+  if (!t || !t.closest) return;
+  var el = t.closest('[data-action]');
+  if (!el) return;
+  var a = el.getAttribute('data-action');
+  if (a === 'toggle-pause' && el.tagName === 'INPUT') return; /* handled on change */
+  if (el.disabled) return;
+  onAction(a, el, ev);
+});
+document.addEventListener('input', function (ev) {
+  var el = ev.target;
+  if (!el || !el.getAttribute || !el.getAttribute('data-bind')) return;
+  if (el.type === 'checkbox') return;
+  applyBind(el);
+});
+document.addEventListener('change', function (ev) {
+  var el = ev.target;
+  if (!el || !el.getAttribute) return;
+  if (el.getAttribute('data-action') === 'toggle-pause') {
+    el.checked = !!(app.state && app.state.paused);
+    togglePause();
+    return;
+  }
+  if (!el.getAttribute('data-bind')) return;
+  applyBind(el);
+  if (el.type === 'checkbox' || el.getAttribute('data-rerender')) rerenderSection();
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape' && $('modal').classList.contains('fallback')) closeModal();
+});
+$('modal').addEventListener('close', onModalClosed);
+$('modal').addEventListener('click', function (ev) { if (ev.target === $('modal')) closeModal(); });
+window.addEventListener('hashchange', onRoute);
+window.addEventListener('beforeunload', function (ev) {
+  if (isDirty()) { ev.preventDefault(); ev.returnValue = ''; return ''; }
+});
+document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
+document.addEventListener('toggle', function (ev) {
+  if (ev.target && ev.target.id === 'jd-allfiles') app.allFilesOpen = ev.target.open;
+}, true);
+
+/* ------------------------------------------------------------------ start */
+
+initAuth();
+app.route = parseRoute();
+if (app.route.name === 'settings') app.lastSection = app.route.section;
+renderAll();
+if (app.token || app.fixture) {
+  refreshState().then(function () {
+    if (app.route.name === 'job') loadJob(app.route.id);
+    if (app.route.name === 'settings' && app.route.section === 'history') loadHistory();
+    if (app.route.name === 'settings' && app.route.section === 'checks') loadPreflight();
+  });
+}
+setInterval(tick, POLL_MS);
+
+})();
+</script>
+</body>
+</html>

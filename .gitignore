@@ -15,3 +15,9 @@ wheels/
 
 # Local SQLite analytics store
 analytics.db
+# auto-factory runtime state
+/factory/jobs/
+/factory/config-history/
+/factory/archive/
+/factory/PAUSE
+/.worktrees/

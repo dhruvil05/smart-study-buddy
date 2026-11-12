@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "base_branch": "main",
+  "merge_method": "squash",
+  "shell": "system",
+  "concurrency": 1,
+  "max_rounds": 3,
+  "labels": {
+    "queue": "factory",
+    "needs_info": "factory:needs-info",
+    "needs_human": "factory:needs-human"
+  },
+  "models": {
+    "intake": "fable",
+    "spec-writer": "opus",
+    "implementer": "opus",
+    "approver": "opus"
+  },
+  "routing": {
+    "low": { "code": "haiku", "auto_merge": false },
+    "medium": { "code": "sonnet", "auto_merge": false },
+    "high": { "code": "sonnet", "auto_merge": false }
+  },
+  "surface_reviewers": {
+    "ui": { "ux": "sonnet", "ui": "haiku" },
+    "security": { "security": "opus" },
+    "data": { "data": "opus" },
+    "access": { "access": "opus" },
+    "integration": { "security": "opus" }
+  },
+  "always_human_surfaces": ["data", "access", "integration"],
+  "checks": [],
+  "checks_none_ok": false,
+  "env": {
+    "template": ".env.factory",
+    "db_name": "{project}_job_{n}",
+    "db_create": "",
+    "db_drop": "",
+    "migrate": "",
+    "seed": "",
+    "dev_server": "",
+    "login_path": "",
+    "local_hosts": ["localhost", "127.0.0.1", "::1"]
+  },
+  "ports": { "base": 5100, "step": 10 },
+  "protected_paths": ["factory/*", ".claude/*", ".github/workflows/*"],
+  "diff_budget": {
+    "low": { "lines": 300, "files": 10 },
+    "medium": { "lines": 800, "files": 25 },
+    "high": { "lines": 1500, "files": 40 }
+  },
+  "cost_caps_usd": { "job": null, "run": null },
+  "prices_usd_per_mtok": {},
+  "runner": {
+    "harness": "claude",
+    "role_harness": {},
+    "agent_timeout_minutes": 60,
+    "harnesses": {
+      "claude": {
+        "cmd": "claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools \"{TOOLS}\" --output-format json",
+        "prompt": "stdin",
+        "output": "claude-json",
+        "model_flag": "--model {MODEL}",
+        "models": { "fable": "fable", "opus": "opus", "sonnet": "sonnet", "haiku": "haiku" },
+        "verified": true
+      },
+      "codex": {
+        "cmd": "codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check \"Read the file {PROMPT_FILE} and follow its instructions exactly.\"",
+        "prompt": "file",
+        "output": "text",
+        "model_flag": "--model {MODEL}",
+        "models": {},
+        "verified": false
+      },
+      "deepseek": {
+        "cmd": "deepseek exec {MODEL_FLAG} \"Read the file {PROMPT_FILE} and follow its instructions exactly.\"",
+        "prompt": "file",
+        "output": "text",
+        "model_flag": "--model {MODEL}",
+        "models": {},
+        "verified": false
+      }
+    }
+  }
+}
