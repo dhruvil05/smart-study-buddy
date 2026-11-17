@@ -19,11 +19,11 @@
   "routing": {
     "low": {
       "code": "haiku",
-      "auto_merge": false
+      "auto_merge": true
     },
     "medium": {
       "code": "sonnet",
-      "auto_merge": false
+      "auto_merge": true
     },
     "high": {
       "code": "opus",
@@ -108,7 +108,7 @@
   },
   "prices_usd_per_mtok": {},
   "runner": {
-    "harness": "codex",
+    "harness": "deepseek",
     "role_harness": {},
     "agent_timeout_minutes": 60,
     "harnesses": {
@@ -139,7 +139,7 @@
         "output": "text",
         "model_flag": "--model {MODEL}",
         "models": {},
-        "verified": false
+        "verified": true
       }
     }
   }
