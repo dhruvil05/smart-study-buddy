@@ -76,9 +76,10 @@ DEFAULTS = {
                 "verified": True,
             },
             "codex": {
+                # codex exec appends piped stdin to its prompt ("Reading additional input from stdin")
                 "cmd": 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check '
-                       '"Read the file {PROMPT_FILE} and follow its instructions exactly."',
-                "prompt": "file",
+                       '"Follow the instructions given on stdin exactly."',
+                "prompt": "stdin",
                 "output": "text",
                 "model_flag": "--model {MODEL}",
                 "models": {},

@@ -1,0 +1,6 @@
+interface:
+  display_name: "auto-factory"
+  short_description: "Run the issue-driven software factory: $factory run"
+policy:
+  # It pushes branches and merges PRs: only when the user asks for it by name.
+  allow_implicit_invocation: false
