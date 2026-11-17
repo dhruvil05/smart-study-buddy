@@ -146,11 +146,11 @@
   .navbar {
     display: flex;
     align-items: center;
-    gap: var(--sp-4);
+    gap: var(--sp-2);
   }
   .navbar-links {
     display: flex;
-    gap: var(--sp-4);
+    gap: var(--sp-2);
     align-items: center;
   }
   .navbar-link {
@@ -239,6 +239,24 @@
     background: var(--accent-weak);
   }
   .mobile-menu .nav-item .ico { width: 18px; height: 18px; flex-shrink: 0; }
+  .mobile-menu .mobile-link {
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-body);
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .mobile-menu .mobile-link:hover {
+    background: var(--accent-weak);
+    color: var(--accent);
+  }
 
   /* Theme toggle within mobile menu */
   .mobile-menu-theme {
@@ -682,6 +700,11 @@
   }
   @media (max-width: 600px) {
     .header { padding: 0 var(--sp-4); }
+    .navbar-links, .toolbar-right > .toolbar-btn { display: none; }
+    .navbar-toggle { display: flex; }
+    .mobile-menu { left: var(--sp-4); right: var(--sp-4); }
+    .quiz-type { width: 100%; min-width: 0; flex-wrap: wrap; }
+    .segmented { max-width: 100%; flex-wrap: wrap; border-radius: var(--r-md); }
     .container { padding: var(--sp-5) var(--sp-4); }
     .hero-title { font-size: 28px; line-height: 34px; }
     .options { grid-template-columns: 1fr; }
@@ -837,18 +860,18 @@
     <span class="logo-mark"><svg class="ico"><use href="#i-brain"/></svg></span>
     Smart Study Buddy
   </div>
-  <nav class="navbar">
-    <div class="navbar-links">
-      <a class="navbar-link" href="#" onclick="openDrawer('stream'); return false;">Stream</a>
-      <a class="navbar-link" href="#" onclick="openDrawer('monitor', false); return false;">Monitor</a>
-    </div>
-    <button class="navbar-toggle" id="navbar-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
-      <span class="bar"></span>
-      <span class="bar"></span>
-      <span class="bar"></span>
-    </button>
-  </nav>
   <div class="toolbar-right">
+    <nav class="navbar">
+      <div class="navbar-links">
+        <a class="navbar-link" data-drawer="stream" href="#" onclick="openDrawer('stream'); return false;">Stream</a>
+        <a class="navbar-link" data-drawer="monitor" href="#" onclick="openDrawer('monitor', false); return false;">Monitor</a>
+      </div>
+      <button class="navbar-toggle" id="navbar-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu" aria-controls="mobile-menu" aria-expanded="false">
+        <span class="bar"></span>
+        <span class="bar"></span>
+        <span class="bar"></span>
+      </button>
+    </nav>
     <button class="toolbar-btn" id="btn-theme" onclick="toggleTheme()" title="Toggle light / dark theme" aria-label="Toggle theme" aria-pressed="false">
       <svg class="ico"><use href="#i-sun"/></svg>
     </button>
@@ -885,15 +908,15 @@
       </button>
     </div>
   </div>
-</header>
 
 <!-- Mobile nav menu -->
-<div class="mobile-menu" id="mobile-menu" aria-hidden="true">
-  <a class="mobile-link" href="#" onclick="openDrawer('stream'); closeMobileMenu(); return false;">Stream</a>
-  <a class="mobile-link" href="#" onclick="openDrawer('monitor', false); closeMobileMenu(); return false;">Monitor</a>
-  <button class="mobile-link" onclick="toggleTheme(); closeMobileMenu();" aria-label="Toggle theme">Toggle Theme</button>
-  <button class="mobile-link" onclick="toggleSettings(event); closeMobileMenu();" aria-label="Open settings">Settings</button>
-</div>
+  <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+    <a class="mobile-link" href="#" onclick="openDrawer('stream'); closeMobileMenu(); return false;">Stream</a>
+    <a class="mobile-link" href="#" onclick="openDrawer('monitor', false); closeMobileMenu(); return false;">Monitor</a>
+    <button class="mobile-link" onclick="toggleTheme(); closeMobileMenu();" aria-label="Toggle theme">Toggle Theme</button>
+    <button class="mobile-link" onclick="toggleSettings(event); closeMobileMenu();" aria-label="Open settings">Settings</button>
+  </div>
+</header>
 
 <!-- App shell: content + docked monitor -->
 <div class="app-shell">
@@ -1107,8 +1130,15 @@ const loadingMessages = [
 ];
 
 /* ── Drawer System ── */
+function setNavActive(id) {
+  document.querySelectorAll('.navbar-link').forEach(link => {
+    link.classList.toggle('active', link.dataset.drawer === id);
+  });
+}
 function openDrawer(id, showBackdrop = true) {
   closeAllDrawers();
+  closeMobileMenu();
+  setNavActive(id);
   if (showBackdrop) document.getElementById('drawer-backdrop').classList.add('show');
   const drawer = document.getElementById(id + '-drawer');
   drawer.classList.add('open');
@@ -1133,6 +1163,7 @@ function closeDrawer(id) {
   }
   if (id === 'monitor' && monitorInterval) { stopMonitorLive(); }
   backdrop.classList.remove('show');
+  setNavActive(null);
 }
 function closeAllDrawers() {
   document.getElementById('drawer-backdrop').classList.remove('show');
@@ -1140,6 +1171,7 @@ function closeAllDrawers() {
     const d = document.getElementById(id + '-drawer');
     if (d) d.classList.remove('open');
   });
+  setNavActive(null);
 }
 
 /* ── Stream Agent Status ── */
@@ -2165,44 +2197,40 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* Mobile Menu Toggle Function */
+function closeMobileMenu() {
+  const mobileMenu = document.getElementById('mobile-menu');
+  const toggle = document.getElementById('navbar-toggle');
+  if (mobileMenu) {
+    mobileMenu.classList.remove('open');
+    mobileMenu.setAttribute('aria-hidden', 'true');
+  }
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+  document.body.classList.remove('menu-open');
+}
+
 function toggleMobileMenu() {
   const mobileMenu = document.getElementById('mobile-menu');
   const isOpen = mobileMenu.classList.contains('open');
 
-  // Close any currently open menus
-  document.querySelectorAll('.mobile-menu').forEach(m => {
-    if (m !== mobileMenu) m.classList.remove('open');
-  });
-
-  // Toggle the menu visibility
   if (!isOpen) {
     mobileMenu.classList.add('open');
+    mobileMenu.setAttribute('aria-hidden', 'false');
+    document.getElementById('navbar-toggle').setAttribute('aria-expanded', 'true');
     document.body.classList.add('menu-open');
   } else {
-    mobileMenu.classList.remove('open');
-    document.body.classList.remove('menu-open');
+    closeMobileMenu();
   }
 }
 
 // Close menu when clicking outside
 document.addEventListener('click', (e) => {
   if (e.target.closest('.navbar-toggle') || e.target.closest('.mobile-menu')) return;
-
-  document.querySelectorAll('.mobile-menu').forEach(m => {
-    m.classList.remove('open');
-    document.body.classList.remove('menu-open');
-  });
+  closeMobileMenu();
 });
 
 // Close mobile menu when clicking a link
 document.querySelectorAll('.navbar-link, .mobile-link').forEach(link => {
-  link.addEventListener('click', () => {
-    const mobileMenu = document.getElementById('mobile-menu');
-    if (mobileMenu && mobileMenu.classList.contains('open')) {
-      mobileMenu.classList.remove('open');
-      document.body.classList.remove('menu-open');
-    }
-  });
+  link.addEventListener('click', closeMobileMenu);
 });
 
 // Close settings popover when clicking outside
