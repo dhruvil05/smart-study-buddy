@@ -31,6 +31,23 @@ QUIZ_HANDLERS = {
 }
 
 
+def _media_blocks(source):
+    """Yield the (start, end) range and min-width of each min-width media block."""
+    blocks = []
+    for match in re.finditer(r"@media\s*\(min-width:\s*(\d+)px\)\s*\{", source):
+        start = match.end() - 1
+        depth = 0
+        for index in range(start, len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    blocks.append((start, index + 1, int(match.group(1))))
+                    break
+    return blocks
+
+
 class _ComposerMarkupParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -91,6 +108,35 @@ class ComposerContractTests(unittest.TestCase):
         study_tag, study_attrs = self.elements_by_id["study-btn"]
         self.assertEqual(study_tag, "button")
         self.assertEqual(study_attrs.get("onclick"), "submitStudy()")
+
+    def test_study_button_right_alignment_is_scoped_to_tablet_and_up(self):
+        blocks = _media_blocks(self.source)
+        target = [
+            (start, end)
+            for start, end, min_width in blocks
+            if min_width == 601
+        ]
+        self.assertTrue(target, "missing @media (min-width: 601px) block")
+        target_start, target_end = target[0]
+
+        scoped_rule = re.search(
+            r"#study-btn\s*\{([^}]*)\}",
+            self.source[target_start:target_end],
+        )
+        self.assertIsNotNone(
+            scoped_rule,
+            "#study-btn rule is missing from the min-width: 601px block",
+        )
+        self.assertRegex(scoped_rule.group(1), r"margin-left\s*:\s*auto\s*;")
+
+        for rule in re.finditer(r"#study-btn\s*\{([^}]*)\}", self.source):
+            if any(start <= rule.start() < end for start, end, _width in blocks):
+                continue
+            self.assertNotRegex(
+                rule.group(1),
+                r"margin-left\s*:",
+                "unscoped #study-btn margin-left rule changes the phone layout",
+            )
 
     def test_topic_input_ctrl_or_cmd_enter_listener_remains(self):
         listener = re.search(
