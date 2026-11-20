@@ -120,6 +120,16 @@ input[type="checkbox"]{width:18px;height:18px;accent-color:var(--accent);margin:
 .status.s-warn i{background:var(--warn-ink)}
 .status.s-fail i{background:var(--red)}
 .status.s-fail{color:var(--red)}
+.status.s-off i{background:var(--field)}
+button.status{background:none;border:0;padding:6px 4px;border-radius:8px;cursor:pointer;font:inherit;font-size:13px}
+button.status:hover{background:var(--hover);color:var(--ink)}
+.runlog{max-height:60vh;overflow:auto;margin:0;font-size:12px;line-height:18px;white-space:pre-wrap;overflow-wrap:anywhere}
+.jctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sunk)}
+.jctl p{margin:0;font-size:13px;color:var(--mute);flex:1 1 260px;min-width:0}
+.jctl .btnrow{flex:0 0 auto}
+.jctl.is-paused{background:var(--warn-bg);border-color:var(--sand-line)}
+.jctl.is-paused p{color:var(--sand-ink)}
+.imgview{display:block;max-width:100%;height:auto;margin:0 auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
 .netbar{background:var(--fail-bg);color:var(--red);border-top:1px solid var(--red-line);font-size:13px}
 .netbar>div{padding:8px 32px}
 .fixturebar{background:var(--accent-bg);color:var(--accent-ink);font-size:13px}
@@ -323,10 +333,8 @@ details[open]>summary{margin-bottom:8px}
 .flist,.rlist{list-style:none;margin:0 0 10px;padding:0 12px}
 .frow{font:inherit;width:100%;display:grid;grid-template-columns:20px minmax(120px,max-content) minmax(0,1fr) auto;align-items:center;gap:12px;padding:8px 12px;border:0;border-radius:8px;background:none;color:var(--ink);text-align:left;cursor:pointer}
 .frow:hover{background:var(--hover)}
-.frow.is-img{cursor:default}
 .ficon{color:var(--mute);display:inline-flex}
 .fname{font-size:13px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.frow.is-img .fname{color:var(--ink2)}
 .fdesc{font-size:13px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fsize{font-size:12px;color:var(--mute);white-space:nowrap}
 .runrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 16px;padding:10px 12px;border-radius:8px}
@@ -628,6 +636,9 @@ var app = {
   pollBusy: false,
   jobBusy: false,
   pauseBusy: false,
+  runnerBusy: false,
+  ctlBusy: false,
+  imageUrl: null,
   focusTest: false,
   foldOpen: {}
 };
@@ -903,12 +914,25 @@ function gateBlocked(cfg) {
 function runStatus() {
   var s = app.state;
   if (!s) return null;
-  if (s.paused) return { t: 'Paused', c: 'warn' };
   if (gateBlocked(s.config)) return { t: 'Gate blocked · no check steps', c: 'fail' };
+  var rn = obj(s.runner);
+  if (!rn.running) return { t: 'Runner off' + (s.paused ? ' · paused' : ''), c: 'off' };
+  if (rn.stopping) return { t: 'Runner stopping…', c: 'warn' };
+  if (rn.phase === 'checking main') return { t: 'Runner checking main…', c: 'warn' };
+  if (s.paused) return { t: 'Runner on · paused', c: 'warn' };
   var sl = obj(s.slots);
   var used = num(sl.used) !== null ? sl.used : 0;
   var total = num(sl.total) !== null ? sl.total : (num(cfgSaved().concurrency) !== null ? cfgSaved().concurrency : '?');
-  return { t: 'Running · ' + used + ' of ' + total + ' slots', c: 'pass' };
+  return { t: 'Runner on · ' + used + ' of ' + total + ' slots', c: 'pass' };
+}
+/* The navbar's Start / Stop / Stop now button for the runner (run.py --watch). */
+function runnerButton(rn) {
+  if (!rn.running) return { icon: ICON.play, label: 'Start', busy: 'Starting…',
+    title: 'Start the runner: it runs the agents and keeps going (feedback, answers, retries, new issues) until you stop it' };
+  if (rn.stopping === 'now') return { icon: ICON.stop, label: 'Stopping…', busy: 'Stopping…', title: 'Ending the running agents', disabled: true };
+  if (rn.stopping) return { icon: ICON.stop, label: 'Stop now', busy: 'Stopping…', danger: true,
+    title: 'End the running agents now; their steps run again on the next start' };
+  return { icon: ICON.stop, label: 'Stop', busy: 'Stopping…', title: 'Stop the runner after the steps in progress finish' };
 }
 function projectName() {
   var p = obj(app.state && app.state.project);
@@ -945,7 +969,9 @@ var ICON = {
   moon: svg('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>', 18),
   chev: '<span class="chev">' + svg('<path d="M9 6l6 6-6 6"></path>', 16) + '</span>',
   cols: svg('<rect x="3" y="4" width="5" height="16" rx="1.5"></rect><rect x="10" y="4" width="5" height="11" rx="1.5"></rect><rect x="17" y="4" width="4" height="7" rx="1.5"></rect>', 15),
-  list: svg('<path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle>', 15)
+  list: svg('<path d="M8 6h13M8 12h13M8 18h13"></path><circle cx="4" cy="6" r="1"></circle><circle cx="4" cy="12" r="1"></circle><circle cx="4" cy="18" r="1"></circle>', 15),
+  stop: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"></rect>', 14, true),
+  retry: svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path>', 14)
 };
 
 function headerHTML() {
@@ -957,6 +983,7 @@ function headerHTML() {
     '</nav>' +
     '<div class="hdr-actions">' +
       '<span id="h-status" role="status"></span>' +
+      '<button type="button" class="btn btn-sm" id="h-runner" data-action="runner-toggle"></button>' +
       '<button type="button" class="btn btn-sm" id="h-pause" data-action="toggle-pause"></button>' +
       '<button type="button" class="icon-btn" id="h-theme" data-action="toggle-theme"></button>' +
     '</div></div><div id="netbar"></div></header>' +
@@ -1014,7 +1041,12 @@ function updateHeader() {
   ts.setAttribute('href', '#/settings/' + app.lastSection);
   setHTML($('tab-dot'), isDirty() ? ' <span class="dot" aria-hidden="true"></span><span class="visually-hidden">(unsaved changes)</span>' : '');
   var st = runStatus();
-  setHTML($('h-status'), st ? '<span class="status s-' + st.c + '" title="' + esc(st.t) + '"><i aria-hidden="true"></i><span>' + esc(st.t) + '</span></span>' : '');
+  setHTML($('h-status'), st ? '<button type="button" class="status s-' + st.c + '" data-action="runner-log" title="' + esc(st.t + ': open the runner log') + '"><i aria-hidden="true"></i><span>' + esc(st.t) + '</span></button>' : '');
+  var rb = $('h-runner'), rn = obj(app.state && app.state.runner), rk = runnerButton(rn);
+  setHTML(rb, rk.icon + '<span>' + esc(app.runnerBusy ? rk.busy : rk.label) + '</span>');
+  rb.className = 'btn btn-sm' + (rk.danger ? ' btn-danger' : '');
+  rb.title = rk.title;
+  rb.disabled = !app.state || !!app.runnerBusy || !!app.fixture || rk.disabled;
   var pb = $('h-pause');
   var paused = !!(app.state && app.state.paused);
   setHTML(pb, (paused ? ICON.play : ICON.pause) + '<span>' + (app.pauseBusy ? (paused ? 'Resuming…' : 'Pausing…') : (paused ? 'Resume' : 'Pause')) + '</span>');
@@ -1172,7 +1204,7 @@ function kanbanHTML(running, waiting, finished) {
 function kanbanCard(j, lane) {
   var top = '<div class="kc-top"><span class="ref mono">' + esc(issueRef(j)) + '</span><span>' + esc(lane === 'done' ? ago(j.ended || j.started) : elapsed(j)) + '</span></div>';
   var title = '<div class="kc-title">' + esc(jobTitle(j)) + '</div>';
-  var tags = riskChip(j, 'sm') + surfacesOf(j).map(function (s) { return chip(s, 'info', 'sm'); }).join('');
+  var tags = ctlChip(j, 'sm') + riskChip(j, 'sm') + surfacesOf(j).map(function (s) { return chip(s, 'info', 'sm'); }).join('');
   var body = '';
   if (lane === 'you') {
     var k = waitingKind(j);
@@ -1192,6 +1224,14 @@ function kanbanCard(j, lane) {
   }
   var pr = j.pr !== undefined && j.pr !== null ? '<span class="kc-pr">PR #' + esc(j.pr) + '</span>' : '';
   return '<a class="kcard" id="kc-' + idSafe(j.id) + '" href="' + esc(jobHref(j)) + '">' + top + title + body + (pr && lane !== 'plan' ? pr : '') + '</a>';
+}
+
+/* A job paused from the dashboard, or stopped by the runner (state.json `stopped`, display only). */
+function ctlChip(j, extra) {
+  if (TERMINAL.indexOf(j.stage) >= 0) return '';
+  if (j.paused) return chip('Paused', 'warn', extra);
+  if (j.stopped) return chip('Stopped', 'fail', extra);
+  return '';
 }
 
 function boardSec(id, title, n, cls, body) {
@@ -1250,7 +1290,7 @@ function activeRow(j) {
   var segs = PIPE.map(function (p, i) { return '<i class="' + (i < idx ? 'done' : i === idx ? 'now' : '') + '"></i>'; }).join('');
   var r = roundOf(j), lim = num(j.round_limit), sub = [];
   if (j.stage === 'intake' && !riskOf(j)) sub.push('<span>Deciding scope and risk</span>');
-  sub.push(riskChip(j) + surfaceChips(j));
+  sub.push(ctlChip(j) + riskChip(j) + surfaceChips(j));
   roundRows(j).forEach(function (row) { sub.push('<span class="rrow"><span class="rrow-l">' + esc(row.label) + '</span>' + row.chips + '</span>'); });
   var facts = [];
   if (r && j.stage !== 'intake' && j.stage !== 'spec') facts.push('round ' + r + (lim ? ' of ' + lim : ''));
@@ -1407,8 +1447,9 @@ function hydrateRunner(files) {
         '<h2 id="h-runstop">The runner stopped this job</h2>' +
         (c === undefined ? '<p class="alert-reason mute">Loading…</p>' : '<p class="alert-reason">' + esc(s.reason || 'No reason recorded.') + '</p>') +
         (hint ? '<p class="alert-hint">' + hint + '</p>' : '') +
-        '<p class="alert-meta">' + (s.when ? esc(fmtWhen(s.when)) + ' · ' : '') + 'Fix the cause, then run <code>python factory/bin/run.py' + (j && j.issue ? ' ' + esc(j.issue) : '') + '</code> again.</p>' +
-        '<div class="btnrow">' + (log ? '<button type="button" class="btn btn-sm" data-action="open-file" data-path="' + esc(log.path) + '">Open the log</button>' : '') +
+        '<p class="alert-meta">' + (s.when ? esc(fmtWhen(s.when)) + ' · ' : '') + 'Fix the cause, then press Retry. Other jobs keep running.</p>' +
+        '<div class="btnrow">' + (app.fixture ? '' : '<button type="button" class="btn btn-sm" data-action="job-ctl" data-ctl="retry"' + (app.ctlBusy ? ' disabled' : '') + '>' + ICON.retry + '<span>Retry</span></button>') +
+        (log ? '<button type="button" class="btn btn-sm" data-action="open-file" data-path="' + esc(log.path) + '">Open the log</button>' : '') +
         '<button type="button" class="btn btn-sm" data-action="open-file" data-path="' + esc(st.path) + '">Details</button></div>' +
         '</div></section>';
     }
@@ -1467,7 +1508,56 @@ function jobHeadHTML(j) {
   facts.push(fmtUsd(jobCost(j)) + (obj(j.cost).partial ? ' (partial)' : ''));
   meta.push('<span>' + esc(facts.join(' · ')) + '</span>');
   return '<div class="jhead"><h1><span class="ref mono">' + esc(issueRef(j)) + '</span>' + esc(jobTitle(j)) + '</h1>' +
-    '<div class="jmeta">' + meta.join('') + '</div>' + trackHTML(j) + '</div>';
+    '<div class="jmeta">' + meta.join('') + '</div>' + trackHTML(j) + jobControlsHTML(j) + '</div>';
+}
+
+/* Pause / Stop now / Resume for one job. Retry for a stopped job sits in the stopped alert. */
+function jobControlsHTML(j) {
+  if (TERMINAL.indexOf(j.stage) >= 0 || app.fixture) return '';
+  var busy = !!app.ctlBusy, dis = busy ? ' disabled' : '';
+  function b(action, icon, label, cls) {
+    return '<button type="button" class="btn btn-sm' + (cls ? ' ' + cls : '') + '" data-action="job-ctl" data-ctl="' + action + '"' + dis + '>' + icon + '<span>' + label + '</span></button>';
+  }
+  if (j.paused) {
+    var p = obj(j.paused);
+    return '<div class="jctl is-paused" role="group" aria-label="Job controls"><p><strong>Paused</strong>' + (p.at ? ' ' + esc(fmtWhen(p.at)) : '') +
+      '. It won\'t move until you resume it; other jobs carry on.</p><div class="btnrow">' + b('resume', ICON.play, busy ? 'Resuming…' : 'Resume') + '</div></div>';
+  }
+  if (RUNNING.indexOf(j.stage) >= 0) {
+    return '<div class="jctl" role="group" aria-label="Job controls"><p>Pause lets the step in progress finish, then holds this job. Stop now ends its running agent; that step starts over when you resume.</p>' +
+      '<div class="btnrow">' + b('pause', ICON.pause, 'Pause') + b('stop', ICON.stop, 'Stop now', 'btn-danger') + '</div></div>';
+  }
+  if (j.stage === 'needs-info') {
+    return '<div class="jctl" role="group" aria-label="Job controls"><p>When the author replies, intake runs again by itself. Pause to hold it until you resume.</p>' +
+      '<div class="btnrow">' + b('pause', ICON.pause, 'Pause') + '</div></div>';
+  }
+  return '';
+}
+
+var CTL_ASK = {
+  stop: 'End this job\'s running agent now? Its step starts over when you resume the job. Other jobs keep running.',
+  pause: '', resume: '', retry: ''
+};
+var CTL_DONE = { pause: 'Job paused: it stops after the step it is on.', stop: 'Job stopped. Resume it when you are ready.',
+  resume: 'Job resumed. The runner picks it up within seconds.', retry: 'Retrying. The runner picks it up within seconds.' };
+function jobControl(action) {
+  if (app.ctlBusy || app.route.name !== 'job' || !CTL_DONE[action]) return;
+  if (CTL_ASK[action] && !window.confirm(CTL_ASK[action])) return;
+  var id = app.route.id;
+  app.ctlBusy = true;
+  renderJobParts();
+  api('POST', '/api/jobs/' + encodeURIComponent(id) + '/control', { action: action }).then(function (r) {
+    app.ctlBusy = false;
+    if (r.ok && r.data && r.data.job && app.job && app.job.id === id) {
+      app.job.job = r.data.job;
+      toast(CTL_DONE[action] + (action !== 'pause' && action !== 'stop' && !obj(app.state && app.state.runner).running ? ' (Start the runner to run it.)' : ''));
+    } else if (r.status !== 401 && r.status !== 403) {
+      toast(errText(r, 'That didn\'t work'));
+    }
+    renderJobParts();
+    loadJob(id, true);
+    refreshState();
+  });
 }
 
 function stageTimes(j) {
@@ -1675,6 +1765,7 @@ function fileDesc(name) {
   if ((m = name.match(/^feedback-(\d+)\.md$/))) return 'Your feedback ' + m[1];
   if ((m = name.match(/^review-([\w-]+)\.md$/))) return revLabel(m[1]) + ' review';
   if ((m = name.match(/^server-([\w-]+)\.log$/))) return 'Dev server output (' + m[1] + ')';
+  if (/^attachments\/image-\d+\.\w+$/i.test(name)) return 'Image from the issue';
   if (/\.png$/i.test(name)) return 'Screenshot';
   return '';
 }
@@ -1687,8 +1778,7 @@ function fileRow(f, name) {
   var img = /\.(png|jpe?g|gif|webp)$/i.test(f.p);
   var icon = img ? FICON.img : /\.(log|json)$/i.test(f.p) ? FICON.log : FICON.doc;
   var inner = '<span class="ficon">' + icon + '</span><span class="fname mono">' + esc(name) + '</span><span class="fdesc">' + esc(fileDesc(name)) + '</span><span class="fsize">' + esc(fmtSize(f.size)) + '</span>';
-  return '<li>' + (img ? '<div class="frow is-img" title="Images open from the job folder on disk">' + inner + '</div>'
-    : '<button type="button" class="frow" data-action="open-file" data-path="' + esc(f.path) + '" aria-label="Open ' + esc(f.p) + '">' + inner + '</button>') + '</li>';
+  return '<li><button type="button" class="frow" data-action="open-file" data-path="' + esc(f.path) + '" aria-label="Open ' + esc(f.p) + '">' + inner + '</button></li>';
 }
 function fgroup(id, title, count, body, openByDefault) {
   var key = app.route.id + '|' + id;
@@ -1722,10 +1812,11 @@ function filesPanelHTML(files) {
     return { path: f.path, p: f.path.replace(/\\/g, '/').replace(/^\.\//, ''), size: f.size };
   });
   if (!all.length) return '';
-  var top = [], rounds = {}, runs = {}, runNotes = [], other = [];
+  var top = [], rounds = {}, runs = {}, runNotes = [], other = [], images = [];
   all.forEach(function (f) {
     var m;
     if (f.p.indexOf('/') < 0) top.push(f);
+    else if (/^attachments\//.test(f.p)) images.push(f);
     else if ((m = f.p.match(/^round-(\d+)\/(.+)$/))) (rounds[+m[1]] = rounds[+m[1]] || []).push({ f: f, name: m[2] });
     else if ((m = f.p.match(/^runs\/(\d+)-([\w-]+)\.(prompt\.md|log|json)$/))) {
       var set = runs[m[1]] = runs[m[1]] || { role: m[2] };
@@ -1739,6 +1830,9 @@ function filesPanelHTML(files) {
   });
   var h = '<section class="panel fpanel" aria-labelledby="h-files"><div class="files-h"><h2 id="h-files">Files</h2><span class="mute small">Everything the agents and scripts wrote for this job. Click a file to read it.</span></div>';
   if (top.length) h += fgroup('fg-job', 'Job files', top.length, '<ul class="flist">' + top.map(function (f) { return fileRow(f, f.p); }).join('') + '</ul>', true);
+  if (images.length) h += fgroup('fg-images', 'Images from the issue', images.length,
+    '<p class="fg-note">Downloaded from the issue so the agents can look at them.</p><ul class="flist">' +
+    images.map(function (f) { return fileRow(f, f.p); }).join('') + '</ul>', true);
   var rn = Object.keys(rounds).map(Number).sort(function (a, b) { return a - b; });
   rn.forEach(function (n, i) {
     var items = rounds[n].sort(function (a, b) { return a.name < b.name ? -1 : 1; });
@@ -2312,7 +2406,25 @@ function renderViewer() {
   } else body = '<pre class="msrc mono">' + esc(c) + '</pre>';
   $('modal-body').innerHTML = body;
 }
+function openImage(path) {
+  app.viewer = null;
+  openModal(path, '<p class="mute">Loading…</p>');
+  if (app.fixture) { setModalBody('<p class="mute">Images aren\'t available in fixture mode.</p>'); return; }
+  var url = '/api/jobs/' + encodeURIComponent(app.route.id) + '/file?path=' + encodeURIComponent(path);
+  fetch(url, { headers: { 'X-Factory-Token': app.token || '' }, cache: 'no-store', credentials: 'same-origin' }).then(function (res) {
+    if (!res.ok || !/^image\//.test(res.headers.get('Content-Type') || '')) throw new Error('HTTP ' + res.status);
+    return res.blob();
+  }).then(function (blob) {
+    if (app.imageUrl) URL.revokeObjectURL(app.imageUrl);
+    app.imageUrl = URL.createObjectURL(blob);
+    setModalBody('<img class="imgview" src="' + esc(app.imageUrl) + '" alt="' + esc(path) + '">');
+  }).catch(function (e) {
+    setModalBody('<p class="msg err">Could not load the image (' + esc(e.message) + ').</p>');
+  });
+}
+
 function openFile(path) {
+  if (/\.(png|jpe?g|gif|webp)$/i.test(path)) { openImage(path); return; }
   app.viewer = { path: path, content: null, mode: app.viewerMode || 'preview' };
   openModal(path, '<p class="mute">Loading…</p>');
   api('GET', '/api/jobs/' + encodeURIComponent(app.route.id) + '/file?path=' + encodeURIComponent(path)).then(function (r) {
@@ -2589,6 +2701,7 @@ var DEFAULT_RUNNER = {
   harness: 'claude',
   role_harness: {},
   agent_timeout_minutes: 60,
+  poll_seconds: 60,
   harnesses: {
     claude: { cmd: 'claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools "{TOOLS}" --output-format json', prompt: 'stdin', output: 'claude-json', model_flag: '--model {MODEL}', models: { fable: 'fable', opus: 'opus', sonnet: 'sonnet', haiku: 'haiku' }, verified: true },
     codex: { cmd: 'codex exec {MODEL_FLAG} --sandbox workspace-write --skip-git-repo-check "Follow the instructions given on stdin exactly."', prompt: 'stdin', output: 'text', model_flag: '--model {MODEL}', models: {}, verified: false },
@@ -2627,7 +2740,8 @@ function runnerSection() {
   h += group('h-which', 'Which tool runs the agents',
     selectRow('runner.harness', 'Default tool', 'Runs every agent unless it has its own tool below.', nameOpts, 'str', ' data-rerender="1"') +
     srow('', 'Per agent', '', perRole) +
-    textRow('runner.agent_timeout_minutes', 'Agent timeout', 'Minutes, 1 to 480. A longer-running agent is stopped.', { input: 'number', type: 'int', min: 1, max: 480, step: 1, short: true }));
+    textRow('runner.agent_timeout_minutes', 'Agent timeout', 'Minutes, 1 to 480. A longer-running agent is stopped.', { input: 'number', type: 'int', min: 1, max: 480, step: 1, short: true }) +
+    textRow('runner.poll_seconds', 'Check GitHub every', 'Seconds, 15 to 3600. How often a running runner looks for answers to intake questions, merges and new issues. Your own actions here are seen within seconds.', { input: 'number', type: 'int', min: 15, max: 3600, step: 1, short: true }));
   h += names.map(function (n) { return harnessCard(n, obj(hs[n]), inUse.indexOf(n) >= 0); }).join('');
   h += '<div><button type="button" class="btn btn-sm" id="btn-add-harness" data-action="add-harness">+ Add agent tool</button></div>';
   return h;
@@ -2834,6 +2948,9 @@ function onAction(action, el, ev) {
   var i = parseInt(el.getAttribute('data-i'), 10);
   switch (action) {
     case 'toggle-pause': togglePause(); break;
+    case 'runner-toggle': runnerToggle(); break;
+    case 'runner-log': showRunnerLog(); break;
+    case 'job-ctl': jobControl(el.getAttribute('data-ctl')); break;
     case 'toggle-theme': toggleTheme(); break;
     case 'show-finished': app.finishedAll = true; renderView(); break;
     case 'set-view': setBoardView(el.getAttribute('data-view')); break;
@@ -2911,6 +3028,57 @@ function togglePause() {
     refreshState();
   });
 }
+function runnerToggle() {
+  if (app.runnerBusy || !app.state || app.fixture) return;
+  var rn = obj(app.state.runner), action;
+  if (!rn.running) {
+    if (!window.confirm('Start the runner? It runs agents (which spends tokens) on the open factory issues and keeps going until you stop it.')) return;
+    action = 'start';
+  } else if (rn.stopping) {
+    if (!window.confirm('End the running agents now? Their steps run again the next time the runner starts.')) return;
+    action = 'stop-now';
+  } else action = 'stop';
+  app.runnerBusy = true;
+  updateHeader();
+  api('POST', '/api/runner', { action: action }).then(function (r) {
+    app.runnerBusy = false;
+    if (r.ok && r.data && app.state) {
+      app.state.runner = r.data.runner || app.state.runner;
+      toast(action === 'start' ? 'Runner started. It checks main first, then starts work.' :
+        action === 'stop' ? 'The runner stops after the steps in progress. Press Stop now to end them.' : 'Stopping the running agents now.');
+    } else if (r.status !== 401 && r.status !== 403) {
+      toast(errText(r, 'The runner didn\'t respond'));
+    }
+    updateHeader();
+    refreshState();
+  });
+}
+
+function runnerLogHTML(d) {
+  var rn = obj(d.runner), lines = [];
+  if (rn.running) {
+    lines.push('<p class="small">Running since ' + esc(fmtWhen(rn.started)) + (rn.watch ? ', watching for new work' : '') +
+      (rn.stopping ? '; stopping (' + esc(rn.stopping) + ')' : '') + '. Working on: ' + esc(arr(rn.active).join(', ') || 'nothing right now') + '.</p>');
+  } else {
+    var last = obj(rn.last);
+    lines.push('<p class="small">The runner is off' + (last.beat ? '; it last ran until ' + esc(fmtWhen(last.beat)) : '') +
+      '. Press Start, or run <code>python factory/bin/run.py --watch</code> in a terminal.</p>');
+  }
+  var log = str(d.log).trim();
+  lines.push(log ? '<pre class="runlog msrc mono">' + esc(log) + '</pre>' : '<p class="mute small">No runner log yet. A runner started from a terminal prints there instead.</p>');
+  return lines.join('');
+}
+function showRunnerLog() {
+  openModal('Runner', '<p class="mute">Loading…</p>');
+  if (app.fixture) { setModalBody(runnerLogHTML({ runner: obj(app.state && app.state.runner), log: '' })); return; }
+  api('GET', '/api/runner').then(function (r) {
+    if (r.ok && r.data) {
+      setModalBody(runnerLogHTML(r.data));
+      var pre = document.querySelector('#modal-body .runlog'); if (pre) pre.scrollTop = pre.scrollHeight;
+    } else setModalBody('<p class="msg err">' + esc(errText(r, 'Could not load the runner log')) + '</p>');
+  });
+}
+
 function syncPauseBox() {
   var cb = $('f-paused');
   if (!cb) return;

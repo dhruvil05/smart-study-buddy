@@ -6,6 +6,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 
@@ -70,11 +71,12 @@ def _kill_tree(proc):
             pass
 
 
-def run_command(command, cwd, shell, timeout, env=None, input_text=None):
+def run_command(command, cwd, shell, timeout, env=None, input_text=None, should_stop=None):
     """Run one command. Returns (exit_code, output, seconds, timed_out).
 
     Non-interactive: stdin is closed unless `input_text` is given. The whole
-    process tree dies on timeout.
+    process tree dies on timeout, or as soon as `should_stop()` (checked every
+    second) returns true.
     """
     kwargs = {}
     if os.name == "nt":
@@ -89,6 +91,20 @@ def run_command(command, cwd, shell, timeout, env=None, input_text=None):
                             stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             encoding="utf-8", errors="replace", env=full_env, **kwargs)
+    done = threading.Event()
+
+    def watch():
+        while not done.wait(1):
+            try:
+                stop = should_stop()
+            except Exception:  # a check that fails never kills an agent
+                stop = False
+            if stop:
+                _kill_tree(proc)
+                return
+
+    if should_stop:
+        threading.Thread(target=watch, daemon=True).start()
     try:
         out, _ = proc.communicate(input=input_text, timeout=timeout)
         timed_out = False
@@ -96,6 +112,8 @@ def run_command(command, cwd, shell, timeout, env=None, input_text=None):
         _kill_tree(proc)
         out, _ = proc.communicate()
         timed_out = True
+    finally:
+        done.set()
     seconds = time.monotonic() - start
     code = proc.returncode if not timed_out else 124
     return code, out or "", seconds, timed_out
