@@ -53,6 +53,19 @@ def write_state(**fields):
         pass  # a heartbeat is best effort (Windows can refuse a replace while the file is read)
 
 
+def code_stamp():
+    """Changes when the factory's code is updated (install.py --upgrade). A running runner keeps
+    the code it started with, so the dashboard asks for a restart when this moves."""
+    stamp = 0
+    for d in (paths.BIN, paths.FACTORY / "factorylib"):
+        for f in d.glob("*.py"):
+            try:
+                stamp = max(stamp, f.stat().st_mtime_ns)
+            except OSError:
+                pass
+    return stamp
+
+
 def status():
     """What the dashboard and `run.py status` show."""
     try:
@@ -64,6 +77,7 @@ def status():
     if alive:
         for k in ("pid", "started", "beat", "watch", "issue", "phase", "active", "stopped"):
             out[k] = data.get(k)
+        out["outdated"] = bool(data.get("code")) and data.get("code") != code_stamp()
     else:
         out["last"] = {k: data.get(k) for k in ("started", "beat", "phase", "exit") if k in data} or None
     return out

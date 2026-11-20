@@ -918,6 +918,7 @@ function runStatus() {
   var rn = obj(s.runner);
   if (!rn.running) return { t: 'Runner off' + (s.paused ? ' · paused' : ''), c: 'off' };
   if (rn.stopping) return { t: 'Runner stopping…', c: 'warn' };
+  if (rn.outdated) return { t: 'Runner on · old version: Stop, then Start', c: 'warn' };
   if (rn.phase === 'checking main') return { t: 'Runner checking main…', c: 'warn' };
   if (s.paused) return { t: 'Runner on · paused', c: 'warn' };
   var sl = obj(s.slots);

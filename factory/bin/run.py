@@ -517,7 +517,8 @@ def cmd_run(only_issue=None, watch=False):
         print("run: another runner is already working on this project (see `run.py status` or the dashboard)")
         return 1
     beat = runstate.Beat()
-    beat(force=True, started=jobs.now(), watch=watch, issue=only_issue, phase="checking main", active=[], stopped={})
+    beat(force=True, started=jobs.now(), watch=watch, issue=only_issue, phase="checking main", active=[], stopped={},
+         code=runstate.code_stamp())
     code, out, err = script("job", "preflight")
     print(out or err, flush=True)
     if code != 0:
@@ -652,6 +653,8 @@ def cmd_status():
           + (f", issue #{s['issue']}" if s.get("issue") else "") + f", pid {s.get('pid')}"
           + (f", stopping ({s['stopping']})" if s.get("stopping") else ""))
     print(f"  {s.get('phase') or '?'}; active: {', '.join(s.get('active') or []) or 'none'}")
+    if s.get("outdated"):
+        print("  the factory was updated after this runner started: stop it and start it again to use the update")
     for k, why in (s.get("stopped") or {}).items():
         print(f"  stopped {k}: {why}")
     return 0
