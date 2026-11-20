@@ -34,6 +34,8 @@ def plan(cfg, intake):
         if surface not in cfg["surface_reviewers"]:
             raise ValueError(f"area {surface!r} isn't in config.json surface_reviewers")
         reviewers.update(cfg["surface_reviewers"][surface])
+    if cfg["routing"][risk].get("light_review") and risk != "high" and "ui" in reviewers:
+        reviewers.pop("ux", None)  # light review: the UI reviewer (screens against the issue) covers UI work alone
     human_areas = [s for s in intake.get("surfaces", []) if s in cfg["always_human_surfaces"]]
     no_checks = not config.enabled_checks(cfg)
     if no_checks:

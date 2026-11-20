@@ -28,9 +28,9 @@ DEFAULTS = {
     "labels": {"queue": "factory", "needs_info": "factory:needs-info", "needs_human": "factory:needs-human"},
     "models": {"intake": "fable", "spec-writer": "opus", "implementer": "opus", "approver": "opus"},
     "routing": {
-        "low": {"code": "haiku", "auto_merge": False},
-        "medium": {"code": "sonnet", "auto_merge": False},
-        "high": {"code": "sonnet", "auto_merge": False},
+        "low": {"code": "haiku", "auto_merge": False, "light_review": False},
+        "medium": {"code": "sonnet", "auto_merge": False, "light_review": False},
+        "high": {"code": "sonnet", "auto_merge": False, "light_review": False},
     },
     "surface_reviewers": {
         "ui": {"ux": "sonnet", "ui": "haiku"},
@@ -177,8 +177,12 @@ def validate(cfg):
         _model(e, f"routing.{risk}.code", r.get("code"))
         if not isinstance(r.get("auto_merge"), bool):
             e.append(f"routing.{risk}.auto_merge must be true or false")
+        if not isinstance(r.get("light_review", False), bool):
+            e.append(f"routing.{risk}.light_review must be true or false")
     if (routing.get("high") or {}).get("auto_merge") is True:
         e.append("routing.high.auto_merge can't be on: high-risk jobs always go to a human")
+    if (routing.get("high") or {}).get("light_review") is True:
+        e.append("routing.high.light_review can't be on: high-risk jobs get every reviewer")
 
     sr = cfg.get("surface_reviewers") or {}
     if set(sr) - set(SURFACES):

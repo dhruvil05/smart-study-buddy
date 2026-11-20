@@ -2689,9 +2689,12 @@ function reviewSection() {
     var amCtl = r === 'high' && !am
       ? '<label class="inline mute"><input type="checkbox" id="' + amId + '" disabled>Auto-merge: never for high risk</label>'
       : '<label class="inline"><input type="checkbox" id="' + amId + '" data-bind="' + p + 'auto_merge" data-type="bool"' + (am ? ' checked' : '') + '>Auto-merge</label>';
+    var lr = row.light_review === true, lrCtl = r === 'high' ? '' :
+      '<label class="inline" title="UI changes get the UI reviewer only, not the UX reviewer too: one agent run less per round">' +
+      '<input type="checkbox" id="' + fieldId(p + 'light_review') + '" data-bind="' + p + 'light_review" data-type="bool"' + (lr ? ' checked' : '') + '>Light review</label>';
     return srow('', cap(r) + ' risk', '', '<div class="row wrapflex" style="gap:12px 20px"><span class="inline"><span class="mute">Code reviewer</span>' +
-      modelSelect(p + 'code', row.code, 'Code reviewer for ' + r + ' risk') + '</span>' + amCtl + '</div>');
-  }).join(''), '', 'Auto-merge lets the approver merge PRs it approves. Changes touching ' +
+      modelSelect(p + 'code', row.code, 'Code reviewer for ' + r + ' risk') + '</span>' + amCtl + lrCtl + '</div>');
+  }).join(''), '', 'Auto-merge lets the approver merge PRs it approves. Light review saves one agent run per round on UI work: the UI reviewer checks the screens and the UX reviewer is skipped. Changes touching ' +
     esc(arr(c.always_human_surfaces).join(', ') || 'nothing in particular') + ' always wait for you, whatever the risk.');
   return h;
 }
