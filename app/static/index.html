@@ -274,7 +274,7 @@
   }
   .mobile-menu-theme .ico { width: 18px; height: 18px; flex-shrink: 0; }
 
-  /* Settings popover (consolidated provider + language + theme) ── */
+  /* Settings popover (provider + language) ── */
   .settings-popover {
     position: absolute; top: calc(100% + 8px); right: var(--sp-5); z-index: 200;
     width: 320px; max-width: calc(100vw - 32px);
@@ -301,14 +301,6 @@
   }
   .lang-select:hover { border-color: var(--accent); }
   .lang-select:focus { border-color: var(--accent); }
-  .set-theme {
-    display: flex; align-items: center; gap: var(--sp-2); width: 100%;
-    padding: 9px 12px; background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--r-md); cursor: pointer; font-size: var(--fs-small); color: var(--text);
-    transition: border-color .15s, background .15s;
-  }
-  .set-theme:hover { border-color: var(--accent); background: var(--accent-weak); }
-
   /* ── Drawer System (IDE-style slide-out) ── */
   .drawer-backdrop {
     position: fixed; inset: 0; background: rgba(10,12,16,.35);
@@ -538,9 +530,36 @@
   textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
   textarea::placeholder { color: var(--text-3); }
 
-  .composer-bar { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
+  .composer-bar { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); flex-wrap: wrap; }
   .composer-bar .grow { flex: 1; min-width: 0; }
-  @media (min-width: 601px) { #study-btn { margin-left: auto; } }
+  @media (min-width: 601px) {
+    .composer-bar {
+      flex-wrap: nowrap;
+      gap: var(--sp-1);
+      min-height: 40px;
+      max-height: 48px;
+    }
+    .composer-bar .segmented { padding: 2px; }
+    .composer-bar .quiz-type { gap: var(--sp-1); }
+    .composer-bar .seg,
+    .composer-bar .quiz-type .qlabel,
+    .composer-bar .switch .slabel,
+    .composer-bar .btn { font-size: 12px; }
+    .composer-bar .seg { padding: 0 var(--sp-2); }
+    .composer-bar .switch { gap: var(--sp-1); padding: 0 var(--sp-2); }
+    .composer-bar .btn { padding: 0 var(--sp-3); }
+    #study-btn { margin-left: auto; }
+  }
+  @media (min-width: 601px) and (max-width: 760px) {
+    .composer-bar .quiz-type { flex-shrink: 0; }
+    .composer-bar .seg,
+    .composer-bar .quiz-type .qlabel,
+    .composer-bar .switch .slabel,
+    .composer-bar .btn { font-size: var(--fs-micro); }
+    .composer-bar .seg { padding: 0 var(--sp-1); }
+    .composer-bar .switch { gap: var(--sp-1); padding: 0 var(--sp-1); }
+    .composer-bar .btn { padding: 0 var(--sp-2); }
+  }
   .quiz-type { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
   .quiz-type .qlabel { font-size: var(--fs-small); font-weight: var(--fw-small); color: var(--text-2); white-space: nowrap; }
 
@@ -717,7 +736,11 @@
     .mon-stats-4 { grid-template-columns: repeat(2, 1fr); }
     .pipeline { flex-direction: column; align-items: stretch; }
     .pipe-arrow { display: none; }
-    .composer-bar { gap: var(--sp-2); }
+    .composer-bar { gap: var(--sp-1); }
+    .composer-bar .grow { display: none; }
+    .composer-bar > .switch { margin-left: auto; }
+    .composer-bar .switch { gap: var(--sp-1); padding: 0 var(--sp-2); }
+    .composer-bar .btn { padding: 0 var(--sp-3); }
     .seg { min-width: 0; padding: 0 var(--sp-2); white-space: normal; text-align: center; }
     .drawer { width: min(320px, 92vw); }
     .stream-drawer { width: 92vw; }
@@ -886,7 +909,7 @@
     </button>
   </div>
 
-  <!-- Settings popover: provider + language + theme -->
+  <!-- Settings popover: provider + language -->
   <div class="settings-popover" id="settings-popover" role="dialog" aria-label="Settings">
     <div class="set-row">
       <span class="set-label">Provider</span>
@@ -905,13 +928,6 @@
         <option value="zh">中文</option>
         <option value="de">Deutsch</option>
       </select>
-    </div>
-    <div class="set-row">
-      <span class="set-label">Theme</span>
-      <button class="set-theme" onclick="toggleTheme()" type="button">
-        <svg class="ico ico--sm" id="set-theme-ico"><use href="#i-sun"/></svg>
-        <span>Toggle light / dark</span>
-      </button>
     </div>
   </div>
 
@@ -1098,8 +1114,6 @@ function setTheme(t) {
   try { localStorage.setItem('ssb_theme', t); } catch (e) {}
   const btn = document.getElementById('btn-theme');
   if (btn) btn.setAttribute('aria-pressed', String(t === 'dark'));
-  const ti = document.getElementById('set-theme-ico');
-  if (ti) ti.innerHTML = '<use href="#i-' + (t === 'dark' ? 'moon' : 'sun') + '"/>';
 }
 function toggleTheme() {
   const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -1122,11 +1136,6 @@ function closeSettings() {
   btn.setAttribute('aria-expanded', 'false');
   btn.classList.remove('active');
 }
-function syncThemeIcon() {
-  const ti = document.getElementById('set-theme-ico');
-  if (ti) ti.innerHTML = '<use href="#i-' + (document.documentElement.getAttribute('data-theme') === 'dark' ? 'moon' : 'sun') + '"/>';
-}
-
 const loadingMessages = [
   'ExplainerAgent is reading your topic...',
   'QuizMakerAgent is writing questions...',
@@ -1475,7 +1484,7 @@ async function applyLocalization(lang) {
     const s = await res.json();
     document.documentElement.lang = lang;
     setText('ui-topic-title', s.topic_prompt);
-    setText('study-btn-label', s.generate);
+    syncStreamLabel();
     setText('tab-explain', s.explanation);
     setText('tab-quiz', s.quiz);
     setText('tab-flashcards', s.flashcards);
@@ -2188,7 +2197,6 @@ function initMonitorResizer() {
 initStreamResizer();
 initMonitorResizer();
 setTheme(document.documentElement.getAttribute('data-theme') || 'light');
-syncThemeIcon();
 syncQuizSegment();
 loadProvider();
 loadLanguage();
