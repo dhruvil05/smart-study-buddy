@@ -36,20 +36,29 @@ gate, routing and merging, all through the same scripts.
 
 1. If `factory/PAUSE` exists, stop: the factory is paused (the dashboard or
    `python factory/bin/job.py unpause` resumes it).
-2. The first time in a project, run `python factory/bin/run.py doctor`. If it
+2. `python factory/bin/run.py status`. If it says `runner: on`, a runner is
+   already working the queue (dashboard or terminal): say so and stop.
+3. The first time in a project, run `python factory/bin/run.py doctor`. If it
    doesn't end with `ok`, show its output and stop.
-3. Run `python factory/bin/run.py` (or `python factory/bin/run.py <n>`).
+4. Run `python factory/bin/run.py --watch` (or `python factory/bin/run.py <n> --watch`).
+   - It keeps going: feedback, answers to intake questions, resumed or
+     retried jobs and new issues are picked up as they come. One job waiting
+     or stopping never holds up the others. It runs until stopped (the
+     dashboard's Stop, `python factory/bin/run.py stop`, or Ctrl+C); with
+     `<n>`, until that issue is merged or rejected.
    - It must run **outside the sandbox**: it pushes branches, calls GitHub and
      starts other agent processes. Request approval for exactly this command.
-   - It runs for a long time (minutes per agent). Start it as a long-running
-     command and keep reading its output until it exits. Relay its progress
-     lines as they come (one per step, e.g. `045-add-a-priority: gate PASS`).
+   - Start it as a long-running command and keep reading its output. Relay
+     its progress lines as they come (one per step, e.g.
+     `045-add-a-priority: gate PASS`).
    - If it can't run here (approval refused, the session can't keep a long
-     command alive), tell the user to run the same command in a terminal
+     command alive), tell the user to press **Start** in the dashboard
+     (`python factory/bin/serve.py`) or run the same command in a terminal
      from the project root, and stop.
-4. When it exits, report its summary table, the "Waiting on people" list and
+5. When it exits, report its summary table, the "Waiting on people" list and
    any "Stopped" jobs with their reasons. Exit code 1 means at least one job
-   stopped; the reason is also in `factory/jobs/<id>/runs/stopped.md`.
+   stopped; the reason is also in `factory/jobs/<id>/runs/stopped.md`, and
+   Retry on the job's page (or `python factory/bin/job.py retry <n>`) tries again.
 
 Never run the agents' steps yourself in this session, and never write their
 files: the runner starts each agent separately and checks what it leaves.
@@ -72,17 +81,22 @@ a command line.
   intake.md for `needs-info`.
 - **Feedback on a needs-human job**, their words verbatim in a file:
   `python factory/bin/job.py feedback <n> --file <path>`. It prints
-  `<id>: feedback-<k>.md, implement round <N>`. Then run
-  `python factory/bin/run.py <n>` as in **$factory run** to build the new round.
+  `<id>: feedback-<k>.md, implement round <N>`. A running runner picks it up
+  by itself; if none is running (`run.py status`), run
+  `python factory/bin/run.py <n> --watch` as in **$factory run**.
 - **Reject** a needs-info or needs-human job, their reason verbatim in a file:
   `python factory/bin/job.py reject <n> --file <path>`.
 - **Answer to a needs-info question**, their answer verbatim in a file:
-  `gh issue comment <n> --body-file <path>`, then `python factory/bin/run.py <n>`
-  (the runner sees the reply and restarts intake).
+  `gh issue comment <n> --body-file <path>`. A running runner sees the reply
+  and restarts intake; if none runs, `python factory/bin/run.py <n> --watch`.
 - **New feature**: `gh issue create --label factory --title "<short imperative title>" --body-file <path>`
-  with the feature verbatim in the file, then `python factory/bin/run.py <n>`
-  with the new issue number.
-- **Pause / resume**: `python factory/bin/job.py pause` / `unpause`.
+  with the feature verbatim in the file. A running runner starts it; if none
+  runs, `python factory/bin/run.py <n> --watch` with the new issue number.
+- **Pause / resume**: everything: `python factory/bin/job.py pause` / `unpause`.
+  One job: `job.py pause <n>` (add `--now` to end its running agent) /
+  `job.py unpause <n>`. A stopped job: `job.py retry <n>`.
+- **Stop the runner**: `python factory/bin/run.py stop` (after the current
+  steps) or `stop --now`.
 - **Dashboard**: `python factory/bin/serve.py` (long-running; it prints a local
   link with a private token). Settings, check steps and agent tools are set there.
 

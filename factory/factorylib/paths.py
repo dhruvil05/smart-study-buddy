@@ -14,6 +14,7 @@ HISTORY = FACTORY / "config-history"
 ARCHIVE = FACTORY / "archive"
 PAUSE = FACTORY / "PAUSE"
 PREFLIGHT = JOBS / "_preflight"
+RUNNER = JOBS / "_runner"
 
 
 def project_name():

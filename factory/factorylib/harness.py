@@ -32,9 +32,14 @@ as a standalone agent, not as a Claude Code subagent. So:
 - Nothing is carried over from earlier rounds except files. Ignore mentions of
   being resumed with SendMessage or of a Stop hook: read the job folder (and,
   for the implementer, impl.md and `git log`) to see what happened before.
-- The runner checks your work after you finish: it runs the gate's dry run
-  after the implementer, pushes the branch and opens the draft PR if you
-  couldn't, and reverts any code change made by a role that must only read.
+- The runner checks your work after you finish: it commits what the
+  implementer left uncommitted, runs the gate's dry run, pushes the branch
+  and opens the draft PR if you couldn't, and reverts any code change made by
+  a role that must only read. So a read-only `.git` or no network is never a
+  reason to stop: finish the work and write your file as usual.
+- To look at an image (issue.md lists them under `## Images`), use your
+  image-viewing tool. If you have none, say so in your output and work from
+  the text.
 - Finish by replying with exactly the one line your instructions ask for.
 - Your job's details (the header line, your role and task) are in the
   "## This job" section at the end.
@@ -160,8 +165,17 @@ def _next_index(runs):
         return n
 
 
-def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None):
-    """Run one agent to completion. Returns its record (also saved as runs/NNN-role.json)."""
+def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None, should_stop=None):
+    """Run one agent to completion, or until `should_stop()` says to end it now.
+    Returns its record (also saved as runs/NNN-role.json); `stopped` is true when it was ended."""
+    ended = []
+
+    def stop_check():
+        if should_stop and should_stop():
+            ended.append(True)
+            return True
+        return False
+
     name, h = harness_for(cfg, role)
     model = h["models"].get(model_tier) if model_tier else None
     prompt, tools = build_prompt(cfg, job, role, task, port)
@@ -177,18 +191,22 @@ def run_agent(cfg, job, role, task, model_tier, port=None, role_for_port=None):
     t0 = time.monotonic()
     code, out, _, timed_out = run_command(command, paths.REPO, cfg["shell"],
                                           cfg["runner"]["agent_timeout_minutes"] * 60, env,
-                                          input_text=prompt if h["prompt"] == "stdin" else None)
+                                          input_text=prompt if h["prompt"] == "stdin" else None,
+                                          should_stop=stop_check if should_stop else None)
     reply, cost, err = parse_output(h["output"], out)
-    if code != 0 and not err and h["output"] == "text":
+    if ended:
+        reply, err = "", None
+    elif code != 0 and not err and h["output"] == "text":
         # A text-output tool that exits non-zero failed as a tool; find the line that says why.
         err = failure_summary(out, code)
     record = {
         "role": role, "harness": name, "model": model or "(tool default)", "task": task,
         "started": started, "seconds": round(time.monotonic() - t0, 1), "exit": code,
-        "timed_out": timed_out, "cost_usd": cost, "tokens": token_count(h["output"], out),
+        "timed_out": timed_out, "stopped": bool(ended), "cost_usd": cost, "tokens": token_count(h["output"], out),
         "reply": reply, "error": err, "log": f"runs/{stem}.log",
     }
-    (runs / f"{stem}.log").write_text(f"$ {command}\n\n{out}", encoding="utf-8")
+    note = "\n\n[auto-factory: stopped from the dashboard; the step runs again on resume]\n" if ended else ""
+    (runs / f"{stem}.log").write_text(f"$ {command}\n\n{out}{note}", encoding="utf-8")
     atomic_write(runs / f"{stem}.json", json.dumps(record, indent=2) + "\n")
     (runs / f"{n:03d}.reserved").unlink(missing_ok=True)
     return record

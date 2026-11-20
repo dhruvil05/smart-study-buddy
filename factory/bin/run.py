@@ -1,8 +1,13 @@
 """Run the factory with any agent CLI: Claude Code, Codex, DeepSeek, or your own.
 
 Usage: python factory/bin/run.py …
-  (nothing)        work through every open `factory` issue, `concurrency` at a time
-  <issue>          run one issue now
+  (nothing)        work through every open `factory` issue, `concurrency` at a time,
+                   until nothing can move without a person
+  --watch          keep running: pick up feedback, answers, resumes, retries and
+                   new issues as they come, until stopped (dashboard, `stop`, Ctrl+C)
+  <issue> [--watch]  run one issue (with --watch: until it is merged or rejected)
+  stop [--now]     ask the running runner to stop: after the current steps, or now
+  status           is a runner working on this project, and on what
   doctor           check the settings and that each agent tool is installed
 
 Which tool runs each role is set in config `runner` (dashboard: Settings →
@@ -23,7 +28,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from factorylib import config, harness, jobs, paths  # noqa: E402
-from factorylib.files import atomic_write, first_line, header, summary_bullets  # noqa: E402
+from factorylib import runner as runstate  # noqa: E402
+from factorylib.files import atomic_write, first_line, header, section, summary_bullets  # noqa: E402
 from factorylib.proc import Refused, gh, gh_json, git  # noqa: E402
 
 PY = sys.executable
@@ -42,6 +48,21 @@ class Stop(Exception):
     def __init__(self, msg, log=None):
         super().__init__(msg)
         self.log = log
+
+
+class Paused(Exception):
+    """A person paused this job or stopped the runner: not a failure, nothing saved."""
+
+
+def paused_now(job_id):
+    """True when this job's running agent must end now: the job was paused with
+    "stop now", or the whole runner was asked to stop now."""
+    if runstate.stop_request() == "now":
+        return True
+    try:
+        return bool((load(job_id).get("paused") or {}).get("now"))
+    except (OSError, ValueError, jobs.NoJob):
+        return False
 
 
 def script(name, *args, stdin=None):
@@ -111,8 +132,11 @@ def agent(job_id, role, task, tier, port_role=None):
     main_before, wt_before = main_snapshot(), worktree_state(job)
     name, _ = harness.harness_for(cfg, role)
     say(f"{job_id}: {role} → {name}" + (f" ({tier})" if tier else ""))
-    rec = harness.run_agent(cfg, job, role, task, tier, port=port, role_for_port=port_role)
+    rec = harness.run_agent(cfg, job, role, task, tier, port=port, role_for_port=port_role,
+                            should_stop=lambda: paused_now(job_id))
     guard(load(job_id), role, main_before, wt_before)
+    if rec.get("stopped"):
+        raise Paused(f"{role} stopped" + (" with the runner" if runstate.stop_request() == "now" else ""))
     if rec["timed_out"]:
         raise Stop(f"{role} timed out after {cfg['runner']['agent_timeout_minutes']} minutes")
     if rec["error"]:  # the tool itself failed (sign-in, quota, bad flag): asking again won't help
@@ -196,6 +220,42 @@ def ensure_pushed_and_pr(job_id):
     say(f"{job_id}: opened draft PR")
 
 
+# A BLOCKED whose only cause is that the agent's sandbox can't write to .git
+# (Codex's workspace-write sandbox, for one). The runner can commit for it.
+GIT_WRITE_BLOCK = re.compile(
+    r"index\.lock|\.git\b[^\n]{0,80}(read-only|read only|not writable|unwritable|denied|deny|permission)"
+    r"|(read-only|read only|not writable|unwritable|denied|permission)[^\n]{0,80}\.git\b"
+    r"|(can.?not|can.t|unable to|no) (create a |make a )?commit", re.I)
+
+
+def leftovers(wt):
+    """Uncommitted changes in a worktree, without the job's own .env."""
+    out = git(wt, "status", "--porcelain", "--untracked-files=all", check=False).stdout
+    return [l for l in out.splitlines() if l.strip() and l[3:].strip('"') != ".env"]
+
+
+def commit_for_agent(job_id):
+    """Commit what the implementer left uncommitted. Sandboxed tools (Codex) often can't write
+    to .git, so the runner commits for them, as it pushes and opens the PR for them. The gate's
+    rules and every reviewer still see the whole diff. Returns the new commit, or None."""
+    job = load(job_id)
+    wt = job.get("worktree")
+    if not wt or not Path(wt).exists() or not leftovers(wt):
+        return None
+    git(wt, "add", "-A", "--", ".", ":(exclude).env", check=False)
+    title = (first_line(jdir(job_id) / "spec.md") or job["title"]).lstrip("# ").strip() or job["title"]
+    res = git(wt, "commit", "--no-verify", "-m", f"{title} (round {job['round']})", check=False)
+    if res.returncode != 0:
+        raise Stop(f"couldn't commit the implementer's changes: {(res.stderr or res.stdout).strip()[:300]}")
+    sha = git(wt, "rev-parse", "HEAD").stdout.strip()
+    say(f"{job_id}: committed the implementer's changes ({sha[:7]})")
+    return sha
+
+
+def blocked_by_git(job_id):
+    return bool(GIT_WRITE_BLOCK.search(section(jdir(job_id) / "impl.md", "Blocked") or ""))
+
+
 def implement_task(job):
     n, d = job["round"], jdir(job["id"])
     task = f"Implement round {n}."
@@ -243,9 +303,19 @@ def step_implement(job):
     is_status = lambda: first_line(d / "impl.md") in ("STATUS: READY", "STATUS: BLOCKED")
     with_retry(jid, "implementer", implement_task(job), is_status, tier("implementer", job),
                "implementer", what="impl.md starting with STATUS: READY or STATUS: BLOCKED")
+    if first_line(d / "impl.md") == "STATUS: BLOCKED" and blocked_by_git(jid):
+        # Not a reason to ask a person: commit the work, then let the agent re-check its status once.
+        sha = commit_for_agent(jid)
+        if sha:
+            agent(jid, "implementer", f"Implement round {job['round']}. Your sandbox can't write to .git, so the "
+                  f"runner committed your changes as {sha[:7]}; that is no longer a blocker, and the runner also "
+                  "pushes and opens the PR. If the work is done, change impl.md's first line to STATUS: READY and "
+                  "drop the git problem from it. If something else still blocks you, keep STATUS: BLOCKED and say what.",
+                  tier("implementer", job), "implementer")
     if first_line(d / "impl.md") == "STATUS: BLOCKED":
         must_advance(jid, "needs-human")
         return
+    commit_for_agent(jid)
     # The gate's dry run, once: what the Stop hook does inside Claude Code.
     code, out, err = script("gate", jid, "--dry")
     if code == 2:
@@ -257,11 +327,13 @@ def step_implement(job):
         if first_line(d / "impl.md") == "STATUS: BLOCKED":
             must_advance(jid, "needs-human")
             return
+        commit_for_agent(jid)
     ensure_pushed_and_pr(jid)
     ok, err = advance(jid, "gate")
     if not ok:
         agent(jid, "implementer", f"Implement round {job['round']}. job.py refused to move on: {err}. Fix that "
-              "(commit everything, keep impl.md's first line), then reply.", tier("implementer", job), "implementer")
+              "(keep impl.md's first line), then reply.", tier("implementer", job), "implementer")
+        commit_for_agent(jid)
         ensure_pushed_and_pr(jid)
         must_advance(jid, "gate")
 
@@ -283,7 +355,7 @@ def step_review(job):
     rd = jdir(jid) / f"round-{n}"
     valid = lambda r: re.fullmatch(r"VERDICT:\s*(PASS|CHANGES)", first_line(rd / f"review-{r}.md") or "") is not None
     todo = [r for r in job["agents"]["reviewers"] if not valid(r)]
-    errors = []
+    errors, paused = [], []
 
     def task_for(r):
         """From round 2: point the reviewer at what it already reviewed, so it checks only the changes."""
@@ -300,6 +372,8 @@ def step_review(job):
             with_retry(jid, f"reviewer-{r}", task_for(r), lambda: valid(r), tier(None, job, r),
                        r if r in REVIEW_PORT_ROLES else None, what=f"round-{n}/review-{r}.md with a VERDICT line")
             script("job", "sync", jid)
+        except Paused as e:
+            paused.append(e)
         except Stop as e:
             errors.append(str(e))
 
@@ -308,6 +382,8 @@ def step_review(job):
         t.start()
     for t in threads:
         t.join()
+    if paused:
+        raise paused[0]
     if errors:
         raise Stop("; ".join(errors))
     script("job", "sync", jid)
@@ -340,6 +416,11 @@ STEPS = {"intake": step_intake, "spec": step_spec, "implement": step_implement, 
          "review": step_review, "approve": step_approve, "merging": step_merging}
 
 
+def save_stop(job_id, reason, log=None):
+    atomic_write(jdir(job_id) / "runs" / "stopped.md",
+                 f"STOPPED\nWHEN: {jobs.now()}\n" + (f"LOG: {log}\n" if log else "") + f"\n{reason}\n")
+
+
 def drive(job_id, stopped):
     (jdir(job_id) / "runs" / "stopped.md").unlink(missing_ok=True)  # a new attempt; an old stop no longer applies
     try:
@@ -347,21 +428,27 @@ def drive(job_id, stopped):
             job = load(job_id)
             if job["stage"] not in STEPS:
                 return
+            if job.get("paused"):
+                say(f"{job_id}: paused (resume it in the dashboard or with job.py unpause {job_id})")
+                return
+            if runstate.stop_request():
+                return
             before = (job["stage"], job["round"])
             STEPS[job["stage"]](job)
             after = load(job_id)
             if (after["stage"], after["round"]) == before:
                 raise Stop(f"no progress in {before[0]}")
         raise Stop("too many steps in one run")
+    except Paused as e:
+        say(f"{job_id}: {e}; paused")
     except (Stop, Refused, jobs.NoJob, config.ConfigError) as e:
         stopped[job_id] = str(e)
         say(f"{job_id}: STOPPED: {e}")
-        log = getattr(e, "log", None)
-        atomic_write(jdir(job_id) / "runs" / "stopped.md",
-                     f"STOPPED\nWHEN: {jobs.now()}\n" + (f"LOG: {log}\n" if log else "") + f"\n{e}\n")
+        save_stop(job_id, e, getattr(e, "log", None))
     except Exception as e:  # never let one job take the run down
         stopped[job_id] = f"{type(e).__name__}: {e}"
         say(f"{job_id}: STOPPED by an error: {type(e).__name__}: {e}")
+        save_stop(job_id, f"{type(e).__name__}: {e}")
 
 
 # ---- Commands ---------------------------------------------------------------
@@ -385,67 +472,132 @@ def start(row, stopped):
         job_id = out
         say(f"{job_id} #{issue}: created")
     elif stage == "needs-info":
-        must_advance(job_id, "intake")
+        try:
+            must_advance(job_id, "intake")
+        except Stop as e:
+            save_stop(job_id, e)
+            raise
     return job_id
 
 
-def cmd_run(only_issue=None):
-    if paths.PAUSE.exists():
-        print("run: the factory is paused (factory/PAUSE); unpause it in the dashboard or with job.py unpause")
-        return 1
-    code, out, err = script("job", "preflight")
-    print(out or err)
-    if code != 0:
-        print("run: main doesn't pass its checks, so nothing starts")
-        return 1
-    cfg = config.load()
-    running, stopped, touched = {}, {}, set()
-    while True:
-        try:
-            rows = queue_rows()
-        except Stop as e:
-            print(f"run: {e}")
-            return 1
-        for row in rows:
-            if len(row) < 4 or row[0] not in ("new", "resume"):
-                continue
-            if only_issue is not None and row[1] != str(only_issue):
-                continue
-            key = row[2] if row[2] != "-" else f"#{row[1]}"
-            if key in running or key in stopped:
-                continue
-            if len(running) >= cfg["concurrency"]:
-                break
-            try:
-                job_id = start(row, stopped)
-            except Stop as e:
-                stopped[key] = str(e)
-                continue
-            if not job_id:
-                continue
-            touched.add(job_id)
-            t = threading.Thread(target=drive, args=(job_id, stopped), daemon=True)
-            running[job_id] = t
-            t.start()
-        if not running:
-            break
-        while all(t.is_alive() for t in running.values()):
-            time.sleep(0.5)
-        for jid in [j for j, t in running.items() if not t.is_alive()]:
-            del running[jid]
-            say(f"{jid}: {load(jid)['stage']} (done for this run)")
+def issue_finished(issue):
+    """True when issue n's job is merged or rejected (a watch on one issue ends there)."""
+    return any(j["issue"] == issue and j["stage"] in jobs.TERMINAL for j in jobs.all_jobs())
+
+
+def report(touched, stopped, only_issue):
     if touched:
         _, out, _ = script("job", "summary", *sorted(touched))
         print(out)
-    waits = [r for r in (queue_rows() if touched or only_issue is None else []) if r and r[0] == "wait"]
+    try:
+        rows = queue_rows() if touched or only_issue is None else []
+    except Stop:
+        rows = []
+    waits = [r for r in rows if r and (r[0] == "wait" or (r[0] == "hold" and "paused" in r[-1]))]
     if waits:
         print("\nWaiting on people:")
         for r in waits:
             print(f"  #{r[1]} {r[2]}: {r[4] if len(r) > 4 else r[3]}")
     if stopped:
-        print("\nStopped (fix, then run again):")
+        print("\nStopped (fix, then run again or press Retry on the job):")
         for k, why in stopped.items():
             print(f"  {k}: {why}")
+
+
+def cmd_run(only_issue=None, watch=False):
+    """Without --watch: until nothing can move without a person. With --watch: until stopped
+    (or, for one issue, until it is merged or rejected). Either way one job stopping or
+    waiting never holds up the others."""
+    if paths.PAUSE.exists() and not watch:
+        print("run: the factory is paused (factory/PAUSE); unpause it in the dashboard or with job.py unpause")
+        return 1
+    try:
+        runstate.claim()
+    except TimeoutError:
+        print("run: another runner is already working on this project (see `run.py status` or the dashboard)")
+        return 1
+    beat = runstate.Beat()
+    beat(force=True, started=jobs.now(), watch=watch, issue=only_issue, phase="checking main", active=[], stopped={},
+         code=runstate.code_stamp())
+    code, out, err = script("job", "preflight")
+    print(out or err, flush=True)
+    if code != 0:
+        print("run: main doesn't pass its checks, so nothing starts")
+        beat(force=True, phase="ended", exit=1)
+        return 1
+    cfg = config.load()
+    poll = cfg["runner"].get("poll_seconds", 60)
+    running, stopped, touched, stopped_at = {}, {}, set(), {}
+    seen, asked, first = None, 0.0, True
+    if watch:
+        say("run: watching; feedback, answers, resumes and new issues are picked up as they come. "
+            "Stop it from the dashboard, with `run.py stop`, or Ctrl+C.")
+    try:
+        while True:
+            finished = [j for j, t in running.items() if not t.is_alive()]
+            for jid in finished:
+                del running[jid]
+                say(f"{jid}: {load(jid)['stage']} (done for now)")
+            request = runstate.stop_request()
+            if request:
+                if not running:
+                    say(f"run: stopped ({request})")
+                    break
+            else:
+                now = time.monotonic()
+                for k in list(stopped):
+                    stopped_at.setdefault(k, now)
+                    if watch and ((k.startswith("#") and now - stopped_at[k] >= poll)
+                                  or (not k.startswith("#") and not (jdir(k) / "runs" / "stopped.md").exists())):
+                        del stopped[k], stopped_at[k]  # retried from the dashboard (or a new issue try)
+                sig = runstate.signature()
+                due = first or bool(finished) or (watch and (sig != seen or now - asked >= poll))
+                if due:
+                    first, seen, asked = False, sig, now
+                    try:
+                        rows = queue_rows()
+                    except Stop as e:
+                        if not watch:
+                            print(f"run: {e}")
+                            return 1
+                        say(f"run: {e}; trying again in {poll} s")
+                        rows = []
+                    cfg = config.load()
+                    for row in rows:
+                        if len(row) < 4 or row[0] not in ("new", "resume"):
+                            continue
+                        if only_issue is not None and row[1] != str(only_issue):
+                            continue
+                        key = row[2] if row[2] != "-" else f"#{row[1]}"
+                        if key in running or key in stopped:
+                            continue
+                        if len(running) >= cfg["concurrency"]:
+                            break
+                        try:
+                            job_id = start(row, stopped)
+                        except Stop as e:
+                            stopped[key] = str(e)
+                            continue
+                        if not job_id:
+                            continue
+                        touched.add(job_id)
+                        t = threading.Thread(target=drive, args=(job_id, stopped), daemon=True)
+                        running[job_id] = t
+                        t.start()
+                    seen = runstate.signature()  # our own moves don't count as a person acting
+                if not running and (not watch or (only_issue is not None and issue_finished(only_issue))):
+                    break
+            beat(phase="stopping" if request else ("watching" if watch else "running"),
+                 active=sorted(running), stopped=dict(stopped))
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        say("run: interrupted; stopping the running agents")
+        runstate.request_stop(now=True)
+        for t in running.values():
+            t.join(timeout=30)
+    finally:
+        beat(force=True, phase="ended", active=[], exit=1 if stopped else 0)
+    report(touched, stopped, only_issue)
     return 1 if stopped else 0
 
 
@@ -481,13 +633,47 @@ def cmd_doctor():
     return 1 if problems else 0
 
 
+def cmd_stop(now):
+    if not runstate.running():
+        print("run: no runner is working on this project")
+        return 0
+    runstate.request_stop(now)
+    print("run: asked the runner to stop " + ("now (running agents are ended; their steps run again on resume)"
+                                              if now else "after the steps it is on"))
+    return 0
+
+
+def cmd_status():
+    s = runstate.status()
+    if not s["running"]:
+        last = s.get("last") or {}
+        print("runner: off" + (f" (last ran {last.get('started')} to {last.get('beat')})" if last.get("beat") else ""))
+        return 0
+    print(f"runner: on since {s.get('started')}, {'watching' if s.get('watch') else 'one pass'}"
+          + (f", issue #{s['issue']}" if s.get("issue") else "") + f", pid {s.get('pid')}"
+          + (f", stopping ({s['stopping']})" if s.get("stopping") else ""))
+    print(f"  {s.get('phase') or '?'}; active: {', '.join(s.get('active') or []) or 'none'}")
+    if s.get("outdated"):
+        print("  the factory was updated after this runner started: stop it and start it again to use the update")
+    for k, why in (s.get("stopped") or {}).items():
+        print(f"  stopped {k}: {why}")
+    return 0
+
+
 def main(argv):
-    if argv in ([], None):
-        sys.exit(cmd_run())
-    if argv == ["doctor"]:
+    argv = list(argv or [])
+    watch = "--watch" in argv
+    rest = [a for a in argv if a != "--watch"]
+    if not rest:
+        sys.exit(cmd_run(watch=watch))
+    if rest == ["doctor"] and not watch:
         sys.exit(cmd_doctor())
-    if len(argv) == 1 and argv[0].isdigit():
-        sys.exit(cmd_run(int(argv[0])))
+    if rest in (["stop"], ["stop", "--now"]) and not watch:
+        sys.exit(cmd_stop(rest == ["stop", "--now"]))
+    if rest == ["status"] and not watch:
+        sys.exit(cmd_status())
+    if len(rest) == 1 and rest[0].isdigit():
+        sys.exit(cmd_run(int(rest[0]), watch=watch))
     print(__doc__.strip())
     sys.exit(0 if argv and argv[0] in ("-h", "--help") else 2)
 

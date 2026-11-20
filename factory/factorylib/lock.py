@@ -23,6 +23,32 @@ else:
         except OSError:
             return False
 
+if os.name == "nt":
+    def _unlock(f):
+        f.seek(0)
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+else:
+    def _unlock(f):
+        fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def is_held(path):
+    """True when another process holds the lock on `path` (this one never counts)."""
+    if str(path) in _held:
+        return False
+    try:
+        f = open(path, "a+")
+    except OSError:
+        return False
+    try:
+        if _try_lock(f):
+            _unlock(f)
+            return False
+        return True
+    finally:
+        f.close()
+
+
 _held = {}
 
 

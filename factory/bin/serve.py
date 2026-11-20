@@ -5,17 +5,20 @@ Usage: python factory/bin/serve.py [--port 8000]
 Open the link it prints. The token in the link is required for every API call,
 so other sites open in your browser can't read or change the factory. It binds
 to 127.0.0.1 only. Saving settings never runs a command; commands run only in a
-job's gate or when you press Test on main.
+job's gate, when you press Test on main, or when you press Start (the runner,
+`run.py --watch`, which runs the agents).
 """
 
 import argparse
 import hmac
 import json
+import os
 import re
 import secrets
 import subprocess
 import sys
 import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -24,12 +27,16 @@ from urllib.parse import parse_qs, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from factorylib import config, jobs, paths  # noqa: E402
+from factorylib import runner as runstate  # noqa: E402
 from factorylib.files import first_line, summary_bullets  # noqa: E402
 from factorylib.proc import git  # noqa: E402
 
 JOB_ID = re.compile(r"^[0-9]{3}-[a-z0-9-]{1,80}$")
 MAX_BODY = 1_000_000
 MAX_FILE = 2_000_000
+MAX_LOG = 1_000_000
+IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+CONTROL = {"pause": ["pause"], "stop": ["pause", "--now"], "resume": ["unpause"], "retry": ["retry"]}
 DASHBOARD = paths.FACTORY / "dashboard" / "index.html"
 CSP = ("default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; "
        "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
@@ -66,6 +73,60 @@ class Preflight:
         return {"status": cls.status, "result": result, "error": cls.error}
 
 
+class Runner:
+    """Starts `run.py --watch` in the background. It outlives the dashboard; Stop asks it to end."""
+    lock = threading.Lock()
+    proc = None
+
+    @classmethod
+    def start(cls):
+        with cls.lock:
+            if runstate.running():
+                return False, "a runner is already working on this project"
+            paths.RUNNER.mkdir(parents=True, exist_ok=True)
+            if runstate.LOG.exists() and runstate.LOG.stat().st_size > MAX_LOG:
+                runstate.LOG.replace(runstate.LOG.with_name("runner.log.1"))
+            log = open(runstate.LOG, "a", encoding="utf-8")
+            log.write(f"\n=== started from the dashboard at {jobs.now()} ===\n")
+            log.flush()
+            kwargs = {}
+            if os.name == "nt":  # its own process group, no window; Ctrl+C on serve.py doesn't reach it
+                kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | 0x08000000
+            else:
+                kwargs["start_new_session"] = True
+            env = dict(os.environ, PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+            try:
+                proc = subprocess.Popen([sys.executable, str(paths.BIN / "run.py"), "--watch"], cwd=str(paths.REPO),
+                                        stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, env=env, **kwargs)
+            finally:
+                log.close()
+            cls.proc = proc
+        for _ in range(100):  # it claims the runner lock first thing
+            if runstate.running():
+                return True, "started"
+            if proc.poll() is not None:
+                return False, "the runner ended at once: " + (log_tail(20).strip().splitlines() or ["see runner.log"])[-1]
+            time.sleep(0.1)
+        return True, "starting"
+
+
+def log_tail(lines=200):
+    try:
+        text = runstate.LOG.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    return "\n".join(text.splitlines()[-lines:])
+
+
+def stopped_reason(job_id):
+    f = paths.job_dir(job_id) / "runs" / "stopped.md"
+    if not f.exists():
+        return None
+    parts = re.split(r"\r?\n\s*\r?\n", f.read_text(encoding="utf-8", errors="replace"), maxsplit=1)
+    body = parts[1].strip() if len(parts) > 1 else ""
+    return (body.splitlines() or ["stopped"])[0][:300]
+
+
 def load_config_raw():
     try:
         return config.load(), []
@@ -77,6 +138,8 @@ def load_config_raw():
 def state():
     cfg, errors = load_config_raw()
     all_jobs = jobs.all_jobs()
+    for j in all_jobs:  # display only
+        j["stopped"] = stopped_reason(j["id"]) if j["stage"] in jobs.RUNNING else None
     dirty = git(paths.REPO, "status", "--porcelain", "--", "factory/config.json", check=False).stdout.strip()
     return {
         "project": {"name": paths.REPO.name, "repo": paths.posix(paths.REPO), "base_branch": cfg["base_branch"]},
@@ -85,7 +148,9 @@ def state():
         "config_errors": errors,
         "config_dirty": bool(dirty),
         "jobs": all_jobs,
-        "slots": {"used": sum(1 for j in all_jobs if j["stage"] in jobs.RUNNING), "total": cfg["concurrency"]},
+        "slots": {"used": sum(1 for j in all_jobs if j["stage"] in jobs.RUNNING and not j.get("paused")),
+                  "total": cfg["concurrency"]},
+        "runner": runstate.status(),
         "preflight": Preflight.state()["result"],
     }
 
@@ -105,9 +170,9 @@ def job_files(job_id):
     return out
 
 
-def job_script(cmd, job_id, text):
-    res = subprocess.run([sys.executable, str(paths.BIN / "job.py"), cmd, job_id], cwd=str(paths.REPO),
-                         input=text, capture_output=True, text=True, encoding="utf-8", errors="replace")
+def job_script(cmd, job_id, text=None, *extra):
+    res = subprocess.run([sys.executable, str(paths.BIN / "job.py"), cmd, job_id, *extra], cwd=str(paths.REPO),
+                         input=text or "", capture_output=True, text=True, encoding="utf-8", errors="replace")
     return res.returncode == 0, (res.stdout if res.returncode == 0 else res.stderr).strip().removeprefix("job: ")
 
 
@@ -182,6 +247,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(HTTPStatus.OK, state())
             if url.path == "/api/preflight":
                 return self.send(HTTPStatus.OK, Preflight.state())
+            if url.path == "/api/runner":
+                return self.send(HTTPStatus.OK, {"runner": runstate.status(), "log": log_tail()})
             if url.path == "/api/config/history":
                 entries = sorted(paths.HISTORY.glob("*.json"), reverse=True) if paths.HISTORY.exists() else []
                 return self.send(HTTPStatus.OK, {"entries": [
@@ -206,8 +273,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.fail(HTTPStatus.NOT_FOUND, "no such file in this job")
                 if target.stat().st_size > MAX_FILE:
                     return self.fail(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "file too large to show")
-                if target.suffix.lower() == ".png":
-                    return self.send(HTTPStatus.OK, target.read_bytes(), "image/png")
+                if target.suffix.lower() in IMAGE_TYPES:
+                    return self.send(HTTPStatus.OK, target.read_bytes(), IMAGE_TYPES[target.suffix.lower()])
                 return self.send(HTTPStatus.OK, {"path": rel, "content": target.read_text(encoding="utf-8", errors="replace")})
             return self.fail(HTTPStatus.NOT_FOUND, "not found")
         except Exception as e:  # keep serving; report the problem to the page
@@ -238,6 +305,31 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     paths.PAUSE.unlink(missing_ok=True)
                 return self.send(HTTPStatus.OK, {"paused": paths.PAUSE.exists()})
+            if url.path == "/api/runner":
+                action = data.get("action")
+                if action == "start":
+                    ok, msg = Runner.start()
+                elif action in ("stop", "stop-now"):
+                    ok = runstate.running()
+                    msg = "no runner is working" if not ok else "stopping"
+                    if ok:
+                        runstate.request_stop(now=action == "stop-now")
+                else:
+                    return self.fail(HTTPStatus.BAD_REQUEST, "action must be start, stop or stop-now")
+                if not ok:
+                    return self.fail(HTTPStatus.CONFLICT, msg)
+                return self.send(HTTPStatus.OK, {"runner": runstate.status(), "message": msg})
+            if len(parts) == 4 and parts[:2] == ["api", "jobs"] and parts[3] == "control":
+                job_id = self.job_id(parts[2])
+                if not job_id:
+                    return None
+                args = CONTROL.get(data.get("action"))
+                if not args:
+                    return self.fail(HTTPStatus.BAD_REQUEST, "action must be pause, stop, resume or retry")
+                ok, msg = job_script(args[0], job_id, None, *args[1:])
+                if not ok:
+                    return self.fail(HTTPStatus.CONFLICT, msg)
+                return self.send(HTTPStatus.OK, {"job": jobs.load(job_id, locked=False), "message": msg})
             if url.path == "/api/preflight":
                 started = Preflight.start()
                 return self.send(HTTPStatus.ACCEPTED if started else HTTPStatus.CONFLICT,

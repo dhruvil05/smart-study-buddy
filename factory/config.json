@@ -108,7 +108,7 @@
   },
   "prices_usd_per_mtok": {},
   "runner": {
-    "harness": "deepseek",
+    "harness": "codex",
     "role_harness": {},
     "agent_timeout_minutes": 60,
     "harnesses": {

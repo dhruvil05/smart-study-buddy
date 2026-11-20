@@ -66,6 +66,7 @@ DEFAULTS = {
         "harness": "claude",
         "role_harness": {},
         "agent_timeout_minutes": 60,
+        "poll_seconds": 60,
         "harnesses": {
             "claude": {
                 "cmd": 'claude -p {MODEL_FLAG} --permission-mode dontAsk --allowedTools "{TOOLS}" --output-format json',
@@ -329,6 +330,7 @@ def _validate_runner(e, runner):
         if name in hs and isinstance(hs[name], dict) and not (hs[name].get("cmd") or "").strip():
             e.append(f"runner.harnesses.{name}.cmd is empty but the runner uses it")
     _int(e, "runner.agent_timeout_minutes", runner.get("agent_timeout_minutes"), 1, 480)
+    _int(e, "runner.poll_seconds", runner.get("poll_seconds"), 15, 3600)
 
 
 def save(cfg, path=None, history=None):
