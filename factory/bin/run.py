@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from factorylib import config, harness, jobs, paths  # noqa: E402
 from factorylib import runner as runstate  # noqa: E402
-from factorylib.files import atomic_write, first_line, header, summary_bullets  # noqa: E402
+from factorylib.files import atomic_write, first_line, header, section, summary_bullets  # noqa: E402
 from factorylib.proc import Refused, gh, gh_json, git  # noqa: E402
 
 PY = sys.executable
@@ -220,6 +220,42 @@ def ensure_pushed_and_pr(job_id):
     say(f"{job_id}: opened draft PR")
 
 
+# A BLOCKED whose only cause is that the agent's sandbox can't write to .git
+# (Codex's workspace-write sandbox, for one). The runner can commit for it.
+GIT_WRITE_BLOCK = re.compile(
+    r"index\.lock|\.git\b[^\n]{0,80}(read-only|read only|not writable|unwritable|denied|deny|permission)"
+    r"|(read-only|read only|not writable|unwritable|denied|permission)[^\n]{0,80}\.git\b"
+    r"|(can.?not|can.t|unable to|no) (create a |make a )?commit", re.I)
+
+
+def leftovers(wt):
+    """Uncommitted changes in a worktree, without the job's own .env."""
+    out = git(wt, "status", "--porcelain", "--untracked-files=all", check=False).stdout
+    return [l for l in out.splitlines() if l.strip() and l[3:].strip('"') != ".env"]
+
+
+def commit_for_agent(job_id):
+    """Commit what the implementer left uncommitted. Sandboxed tools (Codex) often can't write
+    to .git, so the runner commits for them, as it pushes and opens the PR for them. The gate's
+    rules and every reviewer still see the whole diff. Returns the new commit, or None."""
+    job = load(job_id)
+    wt = job.get("worktree")
+    if not wt or not Path(wt).exists() or not leftovers(wt):
+        return None
+    git(wt, "add", "-A", "--", ".", ":(exclude).env", check=False)
+    title = (first_line(jdir(job_id) / "spec.md") or job["title"]).lstrip("# ").strip() or job["title"]
+    res = git(wt, "commit", "--no-verify", "-m", f"{title} (round {job['round']})", check=False)
+    if res.returncode != 0:
+        raise Stop(f"couldn't commit the implementer's changes: {(res.stderr or res.stdout).strip()[:300]}")
+    sha = git(wt, "rev-parse", "HEAD").stdout.strip()
+    say(f"{job_id}: committed the implementer's changes ({sha[:7]})")
+    return sha
+
+
+def blocked_by_git(job_id):
+    return bool(GIT_WRITE_BLOCK.search(section(jdir(job_id) / "impl.md", "Blocked") or ""))
+
+
 def implement_task(job):
     n, d = job["round"], jdir(job["id"])
     task = f"Implement round {n}."
@@ -267,9 +303,19 @@ def step_implement(job):
     is_status = lambda: first_line(d / "impl.md") in ("STATUS: READY", "STATUS: BLOCKED")
     with_retry(jid, "implementer", implement_task(job), is_status, tier("implementer", job),
                "implementer", what="impl.md starting with STATUS: READY or STATUS: BLOCKED")
+    if first_line(d / "impl.md") == "STATUS: BLOCKED" and blocked_by_git(jid):
+        # Not a reason to ask a person: commit the work, then let the agent re-check its status once.
+        sha = commit_for_agent(jid)
+        if sha:
+            agent(jid, "implementer", f"Implement round {job['round']}. Your sandbox can't write to .git, so the "
+                  f"runner committed your changes as {sha[:7]}; that is no longer a blocker, and the runner also "
+                  "pushes and opens the PR. If the work is done, change impl.md's first line to STATUS: READY and "
+                  "drop the git problem from it. If something else still blocks you, keep STATUS: BLOCKED and say what.",
+                  tier("implementer", job), "implementer")
     if first_line(d / "impl.md") == "STATUS: BLOCKED":
         must_advance(jid, "needs-human")
         return
+    commit_for_agent(jid)
     # The gate's dry run, once: what the Stop hook does inside Claude Code.
     code, out, err = script("gate", jid, "--dry")
     if code == 2:
@@ -281,11 +327,13 @@ def step_implement(job):
         if first_line(d / "impl.md") == "STATUS: BLOCKED":
             must_advance(jid, "needs-human")
             return
+        commit_for_agent(jid)
     ensure_pushed_and_pr(jid)
     ok, err = advance(jid, "gate")
     if not ok:
         agent(jid, "implementer", f"Implement round {job['round']}. job.py refused to move on: {err}. Fix that "
-              "(commit everything, keep impl.md's first line), then reply.", tier("implementer", job), "implementer")
+              "(keep impl.md's first line), then reply.", tier("implementer", job), "implementer")
+        commit_for_agent(jid)
         ensure_pushed_and_pr(jid)
         must_advance(jid, "gate")
 

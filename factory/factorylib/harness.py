@@ -32,9 +32,11 @@ as a standalone agent, not as a Claude Code subagent. So:
 - Nothing is carried over from earlier rounds except files. Ignore mentions of
   being resumed with SendMessage or of a Stop hook: read the job folder (and,
   for the implementer, impl.md and `git log`) to see what happened before.
-- The runner checks your work after you finish: it runs the gate's dry run
-  after the implementer, pushes the branch and opens the draft PR if you
-  couldn't, and reverts any code change made by a role that must only read.
+- The runner checks your work after you finish: it commits what the
+  implementer left uncommitted, runs the gate's dry run, pushes the branch
+  and opens the draft PR if you couldn't, and reverts any code change made by
+  a role that must only read. So a read-only `.git` or no network is never a
+  reason to stop: finish the work and write your file as usual.
 - To look at an image (issue.md lists them under `## Images`), use your
   image-viewing tool. If you have none, say so in your output and work from
   the text.
