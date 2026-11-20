@@ -528,39 +528,43 @@
 
   /* ── Unified composer ── */
   .composer { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: var(--sp-4); box-shadow: var(--shadow-1); }
-  .composer h2 { font-size: var(--fs-h2); font-weight: var(--fw-h2); margin-bottom: 6px; }
-  .composer p  { font-size: var(--fs-small); color: var(--text-2); margin-bottom: var(--sp-3); line-height: 1.5; }
+  .composer h2 { font-size: var(--fs-h2); line-height: var(--lh-h2); font-weight: var(--fw-h2); margin-bottom: var(--sp-1); }
+  .composer p  { font-size: var(--fs-small); color: var(--text-2); margin-bottom: var(--sp-3); line-height: var(--lh-small); }
   textarea {
     width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-md);
-    font-size: var(--fs-body); font-family: inherit; resize: vertical; min-height: 88px; outline: none;
-    transition: border-color .15s, box-shadow .15s; background: var(--bg); color: var(--text); line-height: 1.5;
+    font-size: var(--fs-body); font-family: inherit; resize: vertical; min-height: 96px; outline: none;
+    transition: border-color .15s, box-shadow .15s; background: var(--surface-2); color: var(--text); line-height: var(--lh-body);
   }
   textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
   textarea::placeholder { color: var(--text-3); }
 
   .composer-bar { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-3); flex-wrap: wrap; }
   .composer-bar .grow { flex: 1; min-width: 0; }
-  .quiz-type { display: flex; align-items: center; gap: 8px; }
-  .quiz-type .qlabel { font-size: var(--fs-small); font-weight: var(--fw-small); color: var(--text-2); }
+  .quiz-type { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+  .quiz-type .qlabel { font-size: var(--fs-small); font-weight: var(--fw-small); color: var(--text-2); white-space: nowrap; }
 
   /* Segmented control (Swiss) */
-  .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-full); padding: 3px; gap: 2px; }
+  .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-1); gap: 2px; max-width: 100%; }
   .seg {
-    border: none; background: none; cursor: pointer; font: inherit; font-size: var(--fs-small); font-weight: var(--fw-small);
-    color: var(--text-2); padding: 6px 12px; border-radius: var(--r-full); transition: all .15s; white-space: nowrap;
+    display: inline-flex; align-items: center; justify-content: center; min-height: 40px; border: 1px solid transparent;
+    background: none; cursor: pointer; font: inherit; font-size: var(--fs-small); font-weight: var(--fw-small);
+    color: var(--text-2); padding: 0 var(--sp-3); border-radius: var(--r-sm); transition: background .15s, border-color .15s, color .15s, box-shadow .15s; white-space: nowrap;
   }
-  .seg:hover { color: var(--text); }
-  .seg.active { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-1); }
+  .seg:hover { background: var(--surface); color: var(--text); }
+  .seg.active { background: var(--accent-weak); border-color: var(--accent); color: var(--accent); }
+  .seg:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
 
   /* Stream toggle (switch) */
-  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+  .switch { display: inline-flex; align-items: center; min-height: 40px; gap: var(--sp-2); padding: 0 var(--sp-3); border: 1px solid transparent; border-radius: var(--r-full); cursor: pointer; user-select: none; }
+  .switch:hover { background: var(--surface-2); border-color: var(--border); }
   .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
   .switch .track { width: 38px; height: 22px; border-radius: var(--r-full); background: var(--border-strong); position: relative; transition: background .18s; flex: none; }
   .switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-1); transition: transform .18s; }
   .switch input:checked + .track { background: var(--accent); }
   .switch input:checked + .track::after { transform: translateX(16px); }
   .switch input:focus-visible + .track { box-shadow: 0 0 0 3px var(--accent-ring); }
-  .switch .slabel { font-size: var(--fs-small); font-weight: var(--fw-small); color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+  .switch .slabel { font-size: var(--fs-small); font-weight: var(--fw-small); color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; transition: color .15s; }
+  .switch input:checked ~ .slabel { color: var(--accent); }
 
   /* Buttons */
   .btn { height: 40px; padding: 0 18px; border-radius: var(--r-md); font: inherit; font-size: var(--fs-small); font-weight: 600; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; transition: background .15s, border-color .15s, transform .08s, box-shadow .15s; white-space: nowrap; }
@@ -568,6 +572,7 @@
   .btn--solid { background: var(--accent); color: #fff; }
   .btn--solid:hover { background: var(--accent-hover); }
   .btn--solid:disabled { background: var(--border-strong); color: var(--surface); cursor: not-allowed; }
+  .btn--solid:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
   .btn--ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
   .btn--ghost:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -703,8 +708,8 @@
     .navbar-links, .toolbar-right > .toolbar-btn { display: none; }
     .navbar-toggle { display: flex; }
     .mobile-menu { left: var(--sp-4); right: var(--sp-4); }
-    .quiz-type { width: 100%; min-width: 0; flex-wrap: wrap; }
-    .segmented { max-width: 100%; flex-wrap: wrap; border-radius: var(--r-md); }
+    .quiz-type { width: 100%; min-width: 0; flex-direction: column; align-items: stretch; gap: var(--sp-2); }
+    .segmented { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .container { padding: var(--sp-5) var(--sp-4); }
     .hero-title { font-size: 28px; line-height: 34px; }
     .options { grid-template-columns: 1fr; }
@@ -712,7 +717,7 @@
     .pipeline { flex-direction: column; align-items: stretch; }
     .pipe-arrow { display: none; }
     .composer-bar { gap: var(--sp-2); }
-    .seg { padding: 6px 9px; }
+    .seg { min-width: 0; padding: 0 var(--sp-2); white-space: normal; text-align: center; }
     .drawer { width: min(320px, 92vw); }
     .stream-drawer { width: 92vw; }
     .settings-popover { right: var(--sp-4); left: var(--sp-4); width: auto; }
@@ -934,7 +939,7 @@
         <div class="quiz-type">
           <span class="qlabel">Quiz:</span>
           <div class="segmented" id="quiz-segment" role="tablist" aria-label="Quiz type">
-            <button type="button" class="seg" data-qt="mcq" onclick="setQuizType('mcq')" role="tab" aria-selected="true">Multiple choice</button>
+            <button type="button" class="seg active" data-qt="mcq" onclick="setQuizType('mcq')" role="tab" aria-selected="true">Multiple choice</button>
             <button type="button" class="seg" data-qt="tf" onclick="setQuizType('tf')" role="tab" aria-selected="false">True / False</button>
             <button type="button" class="seg" data-qt="fi" onclick="setQuizType('fi')" role="tab" aria-selected="false">Fill in</button>
             <button type="button" class="seg" data-qt="sa" onclick="setQuizType('sa')" role="tab" aria-selected="false">Short answer</button>
