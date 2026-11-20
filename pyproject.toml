@@ -16,4 +16,6 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = []
+dev = [
+    "playwright>=1.65.2",
+]
